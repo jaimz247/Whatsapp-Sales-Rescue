@@ -1,0 +1,85 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    // Check if the user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Check if user owns the document based on the document ID
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Check if user owns the document based on the 'userId' field
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    // Check if user is setting themselves as the owner on create
+    function isNewDocOwner() {
+      return isAuthenticated() && request.auth.uid == request.resource.data.userId;
+    }
+
+    // Ensure the 'userId' field is not modified during an update
+    function uidNotModified() {
+      return !('userId' in request.resource.data) || request.resource.data.userId == resource.data.userId;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    // Users Collection
+    // Document ID is the user's UID
+    match /users/{userId} {
+      allow read, delete: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) && 
+                    (!('email' in request.resource.data) || request.resource.data.email == resource.data.email) &&
+                    (!('createdAt' in request.resource.data) || request.resource.data.createdAt == resource.data.createdAt);
+    }
+
+    // Progress Collection
+    // Document ID is the user's UID
+    match /progress/{userId} {
+      allow read, delete: if isOwner(userId);
+      allow create: if isOwner(userId) && isNewDocOwner();
+      allow update: if isOwner(userId) && uidNotModified();
+    }
+
+    // Audit Results Collection
+    // Document ID is the user's UID
+    match /audit_results/{userId} {
+      allow read, delete: if isOwner(userId);
+      allow create: if isOwner(userId) && isNewDocOwner();
+      allow update: if isOwner(userId) && uidNotModified();
+    }
+
+    // Saved Scripts Collection
+    // Document ID is `${userId}_${scriptId}`
+    match /saved_scripts/{docId} {
+      allow read, delete: if isDocOwner();
+      allow create: if isNewDocOwner() && docId.matches(request.auth.uid + "_.*");
+      allow update: if isDocOwner() && uidNotModified();
+    }
+
+    // Tracker Items Collection
+    // Document ID is auto-generated or timestamp
+    match /tracker_items/{itemId} {
+      allow read, delete: if isDocOwner();
+      allow create: if isNewDocOwner() && 
+                    (!('leadName' in request.resource.data) || request.resource.data.leadName.size() <= 100) &&
+                    (!('notes' in request.resource.data) || request.resource.data.notes.size() <= 5000);
+      allow update: if isDocOwner() && uidNotModified() &&
+                    (!('leadName' in request.resource.data) || request.resource.data.leadName.size() <= 100) &&
+                    (!('notes' in request.resource.data) || request.resource.data.notes.size() <= 5000);
+    }
+  }
+}

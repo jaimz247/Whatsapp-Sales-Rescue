@@ -1,0 +1,211 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Core profile data for a user.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "The user's email address."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "The user's display name."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the profile was created."
+        },
+        "lastLoginAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the user last logged in."
+        },
+        "accessStatus": {
+          "type": "string",
+          "description": "The user's access status (e.g., active, suspended)."
+        },
+        "upgradeStatus": {
+          "type": "string",
+          "description": "The user's upgrade status (e.g., free, pro)."
+        }
+      },
+      "required": ["email", "createdAt"]
+    },
+    "Progress": {
+      "title": "Progress",
+      "description": "Tracks completion of modules or sprints.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user this progress belongs to."
+        },
+        "checklistCompletion": {
+          "type": "object",
+          "description": "State of checklist completion."
+        },
+        "actionPlanCompletion": {
+          "type": "object",
+          "description": "State of action plan completion."
+        },
+        "rescueSprintCompletion": {
+          "type": "object",
+          "description": "State of rescue sprint completion."
+        },
+        "lastVisitedSection": {
+          "type": "string",
+          "description": "The last section the user visited."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the progress was last updated."
+        }
+      },
+      "required": ["userId", "updatedAt"]
+    },
+    "SavedScript": {
+      "title": "SavedScript",
+      "description": "A customized quick reply or script template.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user this script belongs to."
+        },
+        "scriptId": {
+          "type": "string",
+          "description": "The ID of the script."
+        },
+        "savedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the script was saved."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Tags associated with the script."
+        }
+      },
+      "required": ["userId", "scriptId", "savedAt"]
+    },
+    "TrackerItem": {
+      "title": "TrackerItem",
+      "description": "A lead or order tracked in the CRM.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user this tracker item belongs to."
+        },
+        "leadName": {
+          "type": "string",
+          "description": "The name of the lead."
+        },
+        "productOrService": {
+          "type": "string",
+          "description": "The product or service they are interested in."
+        },
+        "stage": {
+          "type": "string",
+          "description": "The current stage in the sales pipeline."
+        },
+        "followUpDate": {
+          "type": "string",
+          "format": "date",
+          "description": "The date for the next follow-up."
+        },
+        "status": {
+          "type": "string",
+          "description": "The status of the lead."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Any notes about the lead."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the lead was added."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the lead was last updated."
+        }
+      },
+      "required": ["userId", "leadName", "stage", "createdAt", "updatedAt"]
+    },
+    "AuditResult": {
+      "title": "AuditResult",
+      "description": "The results of a Sales Leak Audit.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user this audit result belongs to."
+        },
+        "score": {
+          "type": "number",
+          "description": "The total score from the audit."
+        },
+        "categoryBreakdown": {
+          "type": "object",
+          "description": "Breakdown of scores by category."
+        },
+        "recommendedActions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of recommended actions based on the score."
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the audit was completed."
+        }
+      },
+      "required": ["userId", "score", "completedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "User profiles."
+    },
+    "/progress/{progressId}": {
+      "schema": {
+        "$ref": "#/entities/Progress"
+      },
+      "description": "User progress tracking."
+    },
+    "/saved_scripts/{scriptId}": {
+      "schema": {
+        "$ref": "#/entities/SavedScript"
+      },
+      "description": "Saved scripts for users."
+    },
+    "/tracker_items/{itemId}": {
+      "schema": {
+        "$ref": "#/entities/TrackerItem"
+      },
+      "description": "Tracker items for users."
+    },
+    "/audit_results/{auditId}": {
+      "schema": {
+        "$ref": "#/entities/AuditResult"
+      },
+      "description": "Audit results for users."
+    }
+  }
+}
