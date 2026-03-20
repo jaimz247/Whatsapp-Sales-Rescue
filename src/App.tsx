@@ -16,6 +16,7 @@ import Bonuses from './pages/Bonuses';
 import Help from './pages/Help';
 import Profile from './pages/Profile';
 import Access from './pages/Access';
+import AdminDashboard from './pages/AdminDashboard';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './context/AuthContext';
 
@@ -63,6 +64,7 @@ export default function App() {
                   <Route path="/sprint" element={<RescueSprint />} />
                   <Route path="/status-selling" element={<StatusSelling />} />
                   <Route path="/voice-notes" element={<VoiceNotes />} />
+                  <Route path="/admin" element={<AdminDashboard />} />
                 </Routes>
               </Layout>
             </ProtectedRoute>

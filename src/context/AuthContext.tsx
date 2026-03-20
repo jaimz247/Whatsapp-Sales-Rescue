@@ -7,6 +7,7 @@ interface User {
   uid: string;
   email: string;
   isFirstTime: boolean;
+  isAdmin: boolean;
 }
 
 interface AuthContextType {
@@ -32,8 +33,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const userDoc = await getDoc(userDocRef);
           
           let isFirstTime = true;
+          let isAdmin = false;
+          
+          // Check if user is one of the hardcoded admins or has the admin role
+          if (firebaseUser.email === 'elevatemensah@gmail.com' || firebaseUser.email === 'jaxx700@gmail.com') {
+            isAdmin = true;
+          }
+
           if (userDoc.exists()) {
-             isFirstTime = !userDoc.data().onboardingCompleted;
+             const userData = userDoc.data();
+             if (userData.accessStatus === 'revoked') {
+               await logout();
+               setUser(null);
+               setIsLoading(false);
+               return;
+             }
+             isFirstTime = !userData.onboardingCompleted;
+             if (userData.role === 'admin') {
+               isAdmin = true;
+             }
              // Update last login
              await setDoc(userDocRef, {
                lastLoginAt: serverTimestamp()
@@ -47,14 +65,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 lastLoginAt: serverTimestamp(),
                 accessStatus: 'active',
                 upgradeStatus: 'free',
-                onboardingCompleted: false
+                onboardingCompleted: false,
+                role: isAdmin ? 'admin' : 'user'
              });
           }
 
           setUser({
             uid: firebaseUser.uid,
             email: firebaseUser.email,
-            isFirstTime
+            isFirstTime,
+            isAdmin
           });
         } catch (error) {
           console.error("Error fetching user profile:", error);

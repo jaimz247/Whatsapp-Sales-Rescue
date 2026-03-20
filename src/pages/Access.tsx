@@ -134,18 +134,18 @@ export default function Access() {
             exit={{ opacity: 0, y: -10 }}
             className="text-center"
           >
-            <div className="w-16 h-16 bg-neutral-50 rounded-full flex items-center justify-center mx-auto mb-8 border border-neutral-100">
-              <Lock size={24} className="text-neutral-900" strokeWidth={1.5} />
+            <div className="w-16 h-16 bg-neutral-900 rounded-full flex items-center justify-center mx-auto mb-8 shadow-lg">
+              <Lock size={24} className="text-white" strokeWidth={1.5} />
             </div>
-            <h1 className="text-2xl font-medium text-neutral-900 mb-3 tracking-tight">
+            <h1 className="text-3xl font-semibold text-neutral-900 mb-3 tracking-tight">
               Private Access Portal
             </h1>
-            <p className="text-[15px] text-neutral-500 font-light mb-10 max-w-xs mx-auto">
+            <p className="text-[16px] text-neutral-500 font-light mb-10 max-w-xs mx-auto">
               Secure entry for verified members.
             </p>
             <button 
               onClick={() => setState('signin')}
-              className="w-full bg-neutral-900 text-white py-4 rounded-xl font-medium text-[15px] hover:bg-neutral-800 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+              className="w-full bg-neutral-900 text-white py-4 rounded-xl font-medium text-[16px] hover:bg-neutral-800 transition-all active:scale-[0.98] flex items-center justify-center gap-2 shadow-md"
             >
               Access your dashboard
             </button>
@@ -160,8 +160,8 @@ export default function Access() {
             exit={{ opacity: 0, y: -10 }}
           >
             <div className="text-center mb-8">
-              <h2 className="text-2xl font-medium text-neutral-900 mb-3 tracking-tight">Private Access Portal</h2>
-              <p className="text-neutral-500 font-light text-[15px]">Enter your email to receive a secure access link.</p>
+              <h2 className="text-3xl font-semibold text-neutral-900 mb-3 tracking-tight">Private Access Portal</h2>
+              <p className="text-neutral-500 font-light text-[16px]">Enter your email to receive a secure access link.</p>
             </div>
             
             <form onSubmit={handleSignIn} className="space-y-5">
@@ -174,7 +174,7 @@ export default function Access() {
                   placeholder="Email address"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-neutral-50/50 border border-neutral-200 rounded-xl py-4 px-5 text-[15px] focus:outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 transition-all placeholder:text-neutral-400"
+                  className="w-full bg-white border border-neutral-200 rounded-xl py-4 px-5 text-[16px] focus:outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 transition-all placeholder:text-neutral-400 shadow-sm"
                   required
                   autoFocus
                 />
@@ -182,7 +182,7 @@ export default function Access() {
               <button 
                 type="submit"
                 disabled={isProcessing}
-                className="w-full bg-neutral-900 text-white py-4 rounded-xl font-medium text-[15px] hover:bg-neutral-800 transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full bg-neutral-900 text-white py-4 rounded-xl font-medium text-[16px] hover:bg-neutral-800 transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md"
               >
                 {isProcessing ? (
                   <>
@@ -197,7 +197,7 @@ export default function Access() {
             
             <button 
               onClick={() => setState('landing')}
-              className="w-full mt-6 text-neutral-400 font-medium text-[13px] hover:text-neutral-600 transition-colors"
+              className="w-full mt-6 text-neutral-400 font-medium text-[14px] hover:text-neutral-600 transition-colors"
             >
               Cancel
             </button>
@@ -211,23 +211,23 @@ export default function Access() {
             animate={{ opacity: 1, y: 0 }}
             className="text-center"
           >
-            <div className="w-16 h-16 bg-neutral-50 rounded-full flex items-center justify-center mx-auto mb-8 border border-neutral-100">
-              <Mail size={24} className="text-neutral-900" strokeWidth={1.5} />
+            <div className="w-16 h-16 bg-neutral-900 rounded-full flex items-center justify-center mx-auto mb-8 shadow-lg">
+              <Mail size={24} className="text-white" strokeWidth={1.5} />
             </div>
-            <h2 className="text-2xl font-medium text-neutral-900 mb-3 tracking-tight">Check your email</h2>
-            <p className="text-neutral-500 mb-10 font-light text-[15px]">
+            <h2 className="text-3xl font-semibold text-neutral-900 mb-3 tracking-tight">Check your email</h2>
+            <p className="text-neutral-500 mb-10 font-light text-[16px]">
               Check your email for your secure access link. We sent it to <span className="font-medium text-neutral-900">{email}</span>.
             </p>
             
             <div className="pt-6 border-t border-neutral-100">
               {resendTimer > 0 ? (
-                <p className="text-[13px] text-neutral-400">
+                <p className="text-[14px] text-neutral-400">
                   Resend available in {resendTimer}s
                 </p>
               ) : (
                 <button 
                   onClick={() => setState('signin')}
-                  className="text-[13px] text-neutral-900 font-medium hover:text-neutral-600 transition-colors"
+                  className="text-[14px] text-neutral-900 font-medium hover:text-neutral-600 transition-colors"
                 >
                   Didn't receive it? Try again
                 </button>

@@ -22,6 +22,20 @@ testConnection();
 
 // Auth Helpers
 export const sendMagicLink = async (email: string, redirectUrl: string) => {
+  const normalizedEmail = email.toLowerCase().trim();
+  
+  // Always allow hardcoded admins
+  const isHardcodedAdmin = normalizedEmail === 'elevatemensah@gmail.com' || normalizedEmail === 'jaxx700@gmail.com';
+  
+  if (!isHardcodedAdmin) {
+    // Check if email is in allowed_users collection
+    const allowedUserDoc = await getDocFromServer(doc(db, 'allowed_users', normalizedEmail));
+    
+    if (!allowedUserDoc.exists()) {
+      throw new Error('Unauthorized email address. Access denied. Please purchase access first.');
+    }
+  }
+
   const actionCodeSettings = {
     url: redirectUrl,
     handleCodeInApp: true,

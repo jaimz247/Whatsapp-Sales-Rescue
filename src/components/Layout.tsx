@@ -261,6 +261,27 @@ export default function Layout({ children }: { children: ReactNode }) {
                       </div>
                     </div>
                   ))}
+                  
+                  {user?.isAdmin && (
+                    <div>
+                      <h3 className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-2 px-5">Admin</h3>
+                      <div className="flex flex-col gap-1">
+                        <NavLink
+                          to="/admin"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className={cn(
+                            "flex items-center gap-4 px-5 py-3 rounded-2xl transition-all duration-200 font-bold text-[15px]",
+                            location.pathname === '/admin'
+                              ? "bg-neutral-900 text-white" 
+                              : "text-neutral-600 hover:bg-neutral-50"
+                          )}
+                        >
+                          <ShieldCheck size={20} className={location.pathname === '/admin' ? "text-emerald-400" : "text-neutral-400"} />
+                          <span className="flex-1">Admin Dashboard</span>
+                        </NavLink>
+                      </div>
+                    </div>
+                  )}
                 </nav>
               </div>
               <div className="p-6 border-t border-neutral-100 bg-neutral-50">
@@ -333,6 +354,26 @@ export default function Layout({ children }: { children: ReactNode }) {
                 </div>
               </div>
             ))}
+
+            {user?.isAdmin && (
+              <div>
+                <h3 className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-3 px-4">Admin</h3>
+                <div className="flex flex-col gap-1">
+                  <NavLink
+                    to="/admin"
+                    className={cn(
+                      "flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 font-bold text-[13px]",
+                      location.pathname === '/admin'
+                        ? "bg-neutral-900 text-white shadow-md" 
+                        : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900"
+                    )}
+                  >
+                    <ShieldCheck size={16} className={location.pathname === '/admin' ? "text-emerald-400" : "text-neutral-400"} />
+                    <span className="flex-1">Admin Dashboard</span>
+                  </NavLink>
+                </div>
+              </div>
+            )}
           </nav>
         </div>
         <div className="mt-auto p-6 space-y-4">
