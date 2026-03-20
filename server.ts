@@ -1,7 +1,8 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import cors from "cors";
-import { initializeApp, cert, App } from "firebase-admin/app";
+import { initializeApp, cert } from "firebase-admin/app";
+import type { App } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import path from "path";
 import dotenv from "dotenv";
@@ -95,7 +96,7 @@ async function verifyPayPalWebhook(req: express.Request) {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
 
   app.use(cors());
   

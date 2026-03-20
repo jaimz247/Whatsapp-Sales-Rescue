@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
-import { Shield, Plus, Trash2, Search, Users, AlertCircle, CheckCircle2, XCircle, Crown, User as UserIcon, MoreVertical, Edit2, Download, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Shield, Plus, Trash2, Search, Users, AlertCircle, CheckCircle2, XCircle, Crown, User as UserIcon, MoreVertical, Edit2, Download, ArrowUpDown, ArrowUp, ArrowDown, Gift, DollarSign } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, query, getDocs, doc, setDoc, deleteDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { collection, query, getDocs, doc, setDoc, deleteDoc, serverTimestamp, updateDoc, orderBy } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -19,12 +19,27 @@ interface UnifiedUser {
   addedBy?: string;
 }
 
+interface Referral {
+  id: string;
+  referrerId: string;
+  referrerEmail: string;
+  referredEmail: string;
+  amount: number;
+  commission: number;
+  status: 'pending' | 'paid' | 'cancelled';
+  createdAt: any;
+}
+
 type SortField = 'email' | 'displayName' | 'accessStatus' | 'upgradeStatus' | 'role' | 'createdAt';
 type SortDirection = 'asc' | 'desc';
+type TabType = 'users' | 'referrals';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<TabType>('users');
+  
+  // Users state
   const [allUsers, setAllUsers] = useState<UnifiedUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [newEmail, setNewEmail] = useState('');
@@ -35,13 +50,48 @@ export default function AdminDashboard() {
   const [sortField, setSortField] = useState<SortField>('createdAt');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
+  // Referrals state
+  const [referrals, setReferrals] = useState<Referral[]>([]);
+  const [referralsLoading, setReferralsLoading] = useState(false);
+
   useEffect(() => {
     if (user && !user.isAdmin) {
       navigate('/');
       return;
     }
     fetchAllData();
+    fetchReferrals();
   }, [user, navigate]);
+
+  const fetchReferrals = async () => {
+    setReferralsLoading(true);
+    try {
+      const referralsRef = collection(db, 'referrals');
+      const q = query(referralsRef, orderBy('createdAt', 'desc'));
+      const snapshot = await getDocs(q);
+      
+      const refs: Referral[] = [];
+      snapshot.forEach(doc => {
+        refs.push({ id: doc.id, ...doc.data() } as Referral);
+      });
+      setReferrals(refs);
+    } catch (err) {
+      console.error("Error fetching referrals:", err);
+    } finally {
+      setReferralsLoading(false);
+    }
+  };
+
+  const handleUpdateReferralStatus = async (referralId: string, newStatus: 'pending' | 'paid' | 'cancelled') => {
+    if (!window.confirm(`Are you sure you want to mark this referral as ${newStatus}?`)) return;
+    try {
+      await updateDoc(doc(db, 'referrals', referralId), { status: newStatus });
+      await fetchReferrals();
+    } catch (err) {
+      console.error("Error updating referral status:", err);
+      setError("Failed to update referral status.");
+    }
+  };
 
   const fetchAllData = async () => {
     setIsLoading(true);
@@ -292,8 +342,40 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      {/* Tabs */}
+      <div className="flex items-center gap-4 mb-8 border-b border-neutral-200">
+        <button
+          onClick={() => setActiveTab('users')}
+          className={`pb-4 px-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'users' 
+              ? 'border-neutral-900 text-neutral-900' 
+              : 'border-transparent text-neutral-500 hover:text-neutral-700'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Users size={16} />
+            Users
+          </div>
+        </button>
+        <button
+          onClick={() => setActiveTab('referrals')}
+          className={`pb-4 px-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'referrals' 
+              ? 'border-neutral-900 text-neutral-900' 
+              : 'border-transparent text-neutral-500 hover:text-neutral-700'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Gift size={16} />
+            Referrals
+          </div>
+        </button>
+      </div>
+
+      {activeTab === 'users' ? (
+        <>
+          {/* Stats Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <div className="bg-white border border-neutral-200 rounded-2xl p-5 shadow-sm">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
@@ -545,6 +627,103 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
+        </>
+      ) : (
+        <div className="bg-white border border-neutral-200 rounded-2xl shadow-sm overflow-hidden flex flex-col h-full">
+          <div className="p-6 border-b border-neutral-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <h2 className="text-lg font-medium text-neutral-900 flex items-center gap-2">
+              <Gift size={18} className="text-neutral-400" />
+              Referrals ({referrals.length})
+            </h2>
+          </div>
+
+          <div className="overflow-x-auto flex-1">
+            {referralsLoading ? (
+              <div className="p-12 flex justify-center">
+                <div className="w-8 h-8 border-2 border-neutral-200 border-t-neutral-900 rounded-full animate-spin"></div>
+              </div>
+            ) : referrals.length === 0 ? (
+              <div className="p-12 text-center">
+                <p className="text-neutral-500">No referrals found.</p>
+              </div>
+            ) : (
+              <table className="w-full text-left border-collapse min-w-[800px]">
+                <thead>
+                  <tr className="bg-neutral-50/50 border-b border-neutral-100">
+                    <th className="py-3 px-6 text-xs font-medium text-neutral-500 uppercase tracking-wider">Date</th>
+                    <th className="py-3 px-6 text-xs font-medium text-neutral-500 uppercase tracking-wider">Referrer</th>
+                    <th className="py-3 px-6 text-xs font-medium text-neutral-500 uppercase tracking-wider">Referred User</th>
+                    <th className="py-3 px-6 text-xs font-medium text-neutral-500 uppercase tracking-wider">Amount</th>
+                    <th className="py-3 px-6 text-xs font-medium text-neutral-500 uppercase tracking-wider">Commission</th>
+                    <th className="py-3 px-6 text-xs font-medium text-neutral-500 uppercase tracking-wider">Status</th>
+                    <th className="py-3 px-6 text-xs font-medium text-neutral-500 uppercase tracking-wider text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {referrals.map((ref) => (
+                    <tr key={ref.id} className="hover:bg-neutral-50/50 transition-colors">
+                      <td className="py-4 px-6 text-[13px] text-neutral-500">
+                        {ref.createdAt?.toDate ? ref.createdAt.toDate().toLocaleDateString() : 'N/A'}
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="text-[14px] font-medium text-neutral-900">{ref.referrerEmail}</div>
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="text-[14px] text-neutral-500">{ref.referredEmail}</div>
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="text-[14px] font-medium text-neutral-900">${ref.amount?.toFixed(2)}</div>
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="text-[14px] font-medium text-emerald-600">${ref.commission?.toFixed(2)}</div>
+                      </td>
+                      <td className="py-4 px-6">
+                        {ref.status === 'paid' && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">
+                            <CheckCircle2 size={12} /> Paid
+                          </span>
+                        )}
+                        {ref.status === 'pending' && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700">
+                            <AlertCircle size={12} /> Pending
+                          </span>
+                        )}
+                        {ref.status === 'cancelled' && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700">
+                            <XCircle size={12} /> Cancelled
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-4 px-6 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {ref.status === 'pending' && (
+                            <>
+                              <button
+                                onClick={() => handleUpdateReferralStatus(ref.id, 'paid')}
+                                className="p-1.5 text-neutral-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
+                                title="Mark as Paid"
+                              >
+                                <DollarSign size={16} />
+                              </button>
+                              <button
+                                onClick={() => handleUpdateReferralStatus(ref.id, 'cancelled')}
+                                className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                                title="Cancel Referral"
+                              >
+                                <XCircle size={16} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
