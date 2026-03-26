@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Shield, Plus, Trash2, Search, Users, AlertCircle, CheckCircle2, XCircle, Crown, User as UserIcon, MoreVertical, Edit2, Download, ArrowUpDown, ArrowUp, ArrowDown, Gift, DollarSign } from 'lucide-react';
+import { toast } from 'sonner';
 import { db } from '../firebase';
 import { collection, query, getDocs, doc, setDoc, deleteDoc, serverTimestamp, updateDoc, orderBy } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
@@ -77,6 +78,7 @@ export default function AdminDashboard() {
       setReferrals(refs);
     } catch (err) {
       console.error("Error fetching referrals:", err);
+      toast.error("Failed to load referrals");
     } finally {
       setReferralsLoading(false);
     }
@@ -89,6 +91,7 @@ export default function AdminDashboard() {
       await fetchReferrals();
     } catch (err) {
       console.error("Error updating referral status:", err);
+      toast.error("Failed to update referral status");
       setError("Failed to update referral status.");
     }
   };
@@ -134,6 +137,7 @@ export default function AdminDashboard() {
       setAllUsers(Array.from(unifiedMap.values()));
     } catch (err) {
       console.error("Error fetching admin data:", err);
+      toast.error("Failed to load users");
       setError("Failed to load users. Make sure you have admin permissions.");
     } finally {
       setIsLoading(false);
@@ -164,9 +168,11 @@ export default function AdminDashboard() {
       }
       
       setNewEmail('');
+      toast.success("Access granted successfully");
       await fetchAllData();
     } catch (err) {
       console.error("Error granting access:", err);
+      toast.error("Failed to grant access");
       setError("Failed to grant access. Please try again.");
     } finally {
       setIsAdding(false);
@@ -192,8 +198,10 @@ export default function AdminDashboard() {
       }
       
       await fetchAllData();
+      toast.success("Access revoked successfully");
     } catch (err) {
       console.error("Error revoking access:", err);
+      toast.error("Failed to revoke access");
       setError("Failed to revoke access.");
     }
   };
@@ -208,8 +216,10 @@ export default function AdminDashboard() {
         upgradeStatus: newStatus
       });
       await fetchAllData();
+      toast.success(`Subscription updated to ${newStatus}`);
     } catch (err) {
       console.error("Error updating subscription:", err);
+      toast.error("Failed to update subscription");
       setError("Failed to update subscription.");
     }
   };
@@ -224,8 +234,10 @@ export default function AdminDashboard() {
         role: newRole
       });
       await fetchAllData();
+      toast.success(`Role updated to ${newRole}`);
     } catch (err) {
       console.error("Error updating role:", err);
+      toast.error("Failed to update role");
       setError("Failed to update role.");
     }
   };

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { CheckCircle2, AlertCircle, ArrowRight, Activity } from 'lucide-react';
+import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase';
@@ -87,6 +88,7 @@ export default function SalesLeakAudit() {
         }
       } catch (error) {
         console.error("Error fetching audit result:", error);
+        toast.error("Failed to load previous audit result");
       }
     };
     fetchPreviousResult();
@@ -117,8 +119,10 @@ export default function SalesLeakAudit() {
           
           await setDoc(doc(db, 'audit_results', user.uid), resultData);
           setSavedResult(resultData);
+          toast.success("Audit results saved");
         } catch (error) {
           console.error("Error saving audit result:", error);
+          toast.error("Failed to save audit results");
         }
       }
     }

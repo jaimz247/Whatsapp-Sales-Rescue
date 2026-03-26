@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, MessageSquareText, BookOpen, ListTodo, CheckCircle2, PlayCircle, Sparkles, ChevronRight, Clock, Star, AlertCircle, PlusCircle, X, UserCircle, Zap, Target, Activity, ArrowUpRight } from 'lucide-react';
+import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { isToday, isBefore, startOfToday } from 'date-fns';
 import { scripts } from '../data/scripts';
@@ -13,7 +14,6 @@ export default function Dashboard() {
   const [lastVisited, setLastVisited] = useState<string | null>(null);
   const [followUpsDue, setFollowUpsDue] = useState(0);
   const [recentScripts, setRecentScripts] = useState<any[]>([]);
-  const [showOnboarding, setShowOnboarding] = useState(false);
   const [profileComplete, setProfileComplete] = useState(false);
   const [auditTaken, setAuditTaken] = useState(false);
   const [savedScriptsCount, setSavedScriptsCount] = useState(0);
@@ -21,12 +21,6 @@ export default function Dashboard() {
   const { user } = useAuth();
 
   useEffect(() => {
-    // Check for onboarding
-    const onboarded = localStorage.getItem('rescueKit_onboarded');
-    if (!onboarded) {
-      setShowOnboarding(true);
-    }
-
     const fetchData = async () => {
       if (!user) return;
 
@@ -37,12 +31,6 @@ export default function Dashboard() {
           const p = profileDoc.data();
           if (p.businessProfile?.businessName && p.businessProfile?.productName) {
             setProfileComplete(true);
-          }
-          if (p.onboardingCompleted) {
-            setShowOnboarding(false);
-            localStorage.setItem('rescueKit_onboarded', 'true');
-          } else {
-            setShowOnboarding(true);
           }
         }
 
@@ -107,6 +95,7 @@ export default function Dashboard() {
 
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
+        toast.error("Failed to load dashboard data");
       }
     };
 
@@ -130,19 +119,6 @@ export default function Dashboard() {
       }
     }
   }, [user]);
-
-  const completeOnboarding = async () => {
-    localStorage.setItem('rescueKit_onboarded', 'true');
-    setShowOnboarding(false);
-    if (user) {
-      try {
-        const userDocRef = doc(db, 'users', user.uid);
-        await setDoc(userDocRef, { onboardingCompleted: true }, { merge: true });
-      } catch (error) {
-        console.error("Error saving onboarding status:", error);
-      }
-    }
-  };
 
   const totalChecklistItems = 25; // Hardcoded for now based on data
   const progress = Math.round((completedChecklistItems / totalChecklistItems) * 100) || 0;
@@ -485,86 +461,6 @@ export default function Dashboard() {
       >
         <PlusCircle size={28} />
       </Link>
-
-      {/* Onboarding Modal */}
-      <AnimatePresence>
-        {showOnboarding && (
-          <>
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-neutral-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4"
-            >
-              <motion.div 
-                initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                className="bg-white rounded-[2.5rem] w-full max-w-lg overflow-hidden shadow-2xl relative"
-              >
-                <div className="bg-neutral-900 p-10 text-white relative overflow-hidden">
-                  <div className="relative z-10">
-                    <motion.div 
-                      initial={{ scale: 0.8, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{ delay: 0.2 }}
-                      className="w-16 h-16 bg-emerald-500 rounded-3xl flex items-center justify-center mb-8 shadow-2xl shadow-emerald-500/40 rotate-3"
-                    >
-                      <Sparkles size={32} />
-                    </motion.div>
-                    <h2 className="text-4xl font-bold tracking-tight mb-4 leading-tight">Rescue Your <br />WhatsApp Sales.</h2>
-                    <p className="text-neutral-400 font-light leading-relaxed text-lg">Your premium toolkit is ready. Let's get you set up for maximum profit in 3 minutes.</p>
-                  </div>
-                  <div className="absolute top-0 right-0 -mr-24 -mt-24 w-64 h-64 bg-emerald-500/20 rounded-full blur-[100px]"></div>
-                  <div className="absolute bottom-0 left-0 -ml-12 -mb-12 w-32 h-32 bg-emerald-600/10 rounded-full blur-3xl"></div>
-                </div>
-                
-                <div className="p-10 space-y-8">
-                  <div className="space-y-6">
-                    <div className="flex gap-6 group">
-                      <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg shrink-0 group-hover:bg-emerald-600 group-hover:text-white transition-all duration-300 shadow-sm">1</div>
-                      <div>
-                        <h4 className="font-bold text-neutral-900 mb-1.5 text-lg">Personalize Your Scripts</h4>
-                        <p className="text-[14px] text-neutral-500 leading-relaxed font-light">Add your business details once. We'll automatically update every script with your name, product, and bank info.</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-6 group">
-                      <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg shrink-0 group-hover:bg-emerald-600 group-hover:text-white transition-all duration-300 shadow-sm">2</div>
-                      <div>
-                        <h4 className="font-bold text-neutral-900 mb-1.5 text-lg">Optimize Your Profile</h4>
-                        <p className="text-[14px] text-neutral-500 leading-relaxed font-light">Follow the checklist to turn your WhatsApp into a professional storefront that builds instant trust.</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-6 group">
-                      <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg shrink-0 group-hover:bg-emerald-600 group-hover:text-white transition-all duration-300 shadow-sm">3</div>
-                      <div>
-                        <h4 className="font-bold text-neutral-900 mb-1.5 text-lg">Track Every Kobo</h4>
-                        <p className="text-[14px] text-neutral-500 leading-relaxed font-light">Add your leads to the tracker. We'll remind you when to follow up so no money slips through the cracks.</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-6 flex flex-col gap-4">
-                    <Link 
-                      to="/profile"
-                      onClick={completeOnboarding}
-                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-5 rounded-[1.5rem] font-bold text-center transition-all shadow-xl shadow-emerald-600/20 flex items-center justify-center gap-3 text-lg active:scale-[0.98]"
-                    >
-                      <UserCircle size={24} /> Get Started Now
-                    </Link>
-                    <button 
-                      onClick={completeOnboarding}
-                      className="w-full bg-neutral-50 hover:bg-neutral-100 text-neutral-500 py-4 rounded-[1.5rem] font-bold transition-all text-[14px]"
-                    >
-                      I'll explore first
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 }

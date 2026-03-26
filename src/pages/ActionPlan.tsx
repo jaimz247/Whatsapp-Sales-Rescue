@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { CheckCircle2, Circle, Clock, ArrowRight, MessageSquareText, ListTodo } from 'lucide-react';
+import { toast } from 'sonner';
 import { actionPlanData } from '../data/actionPlan';
 import { clsx } from 'clsx';
 import { Link } from 'react-router-dom';
@@ -30,6 +31,7 @@ export default function ActionPlan() {
         }
       } catch (error) {
         console.error("Error fetching action plan progress:", error);
+        toast.error("Failed to load action plan progress");
       } finally {
         setIsLoaded(true);
       }
@@ -59,6 +61,7 @@ export default function ActionPlan() {
       localStorage.setItem('rescueKit_actionPlan', JSON.stringify(Array.from(newCompleted)));
     } catch (error) {
       console.error("Error saving action plan progress:", error);
+      toast.error("Failed to save action plan progress");
       // Revert optimistic update
       setCompletedBlocks(completedBlocks);
     }

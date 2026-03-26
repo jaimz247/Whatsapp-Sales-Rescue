@@ -1,4 +1,5 @@
 import { Calendar, CheckCircle2, ArrowRight, Trophy, Target, Zap } from 'lucide-react';
+import { toast } from 'sonner';
 import { motion } from 'motion/react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
@@ -96,6 +97,7 @@ export default function RescueSprint() {
         }
       } catch (error) {
         console.error("Error fetching sprint progress:", error);
+        toast.error("Failed to load sprint progress");
       }
     };
     fetchProgress();
@@ -124,6 +126,7 @@ export default function RescueSprint() {
       }, { merge: true });
     } catch (error) {
       console.error("Error saving sprint progress:", error);
+      toast.error("Failed to save sprint progress");
       // Revert optimistic update on error
       setCompletedDays(completedDays);
     }

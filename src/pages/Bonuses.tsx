@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import { Copy, Check, MessageCircle, FileText, Calendar, Gift, ArrowRight } from 'lucide-react';
+import { toast } from 'sonner';
 import { clsx } from 'clsx';
 import { Link } from 'react-router-dom';
 
@@ -45,6 +46,7 @@ export default function Bonuses() {
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
+    toast.success("Copied to clipboard");
     setTimeout(() => setCopiedId(null), 2000);
   };
 

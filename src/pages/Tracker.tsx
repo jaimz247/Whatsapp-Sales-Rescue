@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Search, Trash2, Edit2, CheckCircle2, Clock, X, Target, Flame, Calendar, CheckCircle, MessageCircle, Send } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase';
 import { collection, doc, getDocs, setDoc, deleteDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
@@ -82,6 +83,7 @@ export default function Tracker() {
         setLeads(loadedLeads);
       } catch (error) {
         console.error("Error fetching leads:", error);
+        toast.error("Failed to load leads");
       } finally {
         setIsLoaded(true);
       }
@@ -124,6 +126,7 @@ export default function Tracker() {
       });
     } catch (error) {
       console.error("Error adding lead:", error);
+      toast.error("Failed to add lead");
       // Revert on error
       setLeads(leads.filter(l => l.id !== newId));
     }
@@ -181,6 +184,7 @@ export default function Tracker() {
       }, { merge: true });
     } catch (error) {
       console.error("Error saving lead:", error);
+      toast.error("Failed to save lead");
       // Ideally revert optimistic update here
     }
   };
@@ -196,8 +200,10 @@ export default function Tracker() {
     
     try {
       await deleteDoc(doc(db, 'tracker_items', id));
+      toast.success("Lead deleted");
     } catch (error) {
       console.error("Error deleting lead:", error);
+      toast.error("Failed to delete lead");
     }
   };
 
@@ -216,6 +222,7 @@ export default function Tracker() {
       }, { merge: true });
     } catch (error) {
       console.error("Error updating last contacted:", error);
+      toast.error("Failed to update last contacted time");
     }
     
     const cleanPhone = lead.phone.replace(/\D/g, '');

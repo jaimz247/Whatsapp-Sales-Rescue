@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { auth, sendMagicLink, completeMagicLinkSignIn, logout, db } from '../firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -78,6 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           });
         } catch (error) {
           console.error("Error fetching user profile:", error);
+          toast.error("Failed to load user profile");
           setUser(null);
         }
       } else {
@@ -95,8 +97,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // In development/preview, we might need to use the current origin
       const redirectUrl = `${window.location.origin}/access`;
       await sendMagicLink(email, redirectUrl);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error sending magic link:", error);
+      toast.error(error.message || "Failed to send magic link");
       throw error;
     } finally {
       setIsLoading(false);
@@ -107,8 +110,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       await completeMagicLinkSignIn(url);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error completing sign in:", error);
+      toast.error(error.message || "Failed to complete sign in");
       throw error;
     } finally {
       setIsLoading(false);
@@ -121,8 +125,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const userDocRef = doc(db, 'users', user.uid);
         await setDoc(userDocRef, { onboardingCompleted: true }, { merge: true });
         setUser({ ...user, isFirstTime: false });
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error updating onboarding status:", error);
+        toast.error("Failed to update onboarding status");
       }
     }
   };
@@ -132,8 +137,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await logout();
       setUser(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error signing out:", error);
+      toast.error("Failed to sign out");
     } finally {
       setIsLoading(false);
     }

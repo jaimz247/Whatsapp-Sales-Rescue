@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { FileText, Save, CheckCircle2, Plus, Trash2, Copy, AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 
 const defaultWorksheet = [
@@ -30,6 +31,7 @@ export default function QuickRepliesWorksheet() {
   const handleSave = () => {
     localStorage.setItem('rescueKit_quickReplies', JSON.stringify(worksheet));
     setSaved(true);
+    toast.success("Worksheet saved to device");
     setTimeout(() => setSaved(false), 3000);
   };
 
@@ -51,6 +53,7 @@ export default function QuickRepliesWorksheet() {
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
+    toast.success("Copied to clipboard");
     setTimeout(() => setCopiedId(null), 2000);
   };
 

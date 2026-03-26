@@ -22,14 +22,18 @@ import {
   Thermometer,
   Smartphone,
   Mic,
-  Zap
+  Zap,
+  Moon,
+  Sun
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { db } from '../firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import OnboardingTour from './OnboardingTour';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -84,6 +88,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   const handleSignOut = () => {
     signOut();
@@ -129,28 +134,34 @@ export default function Layout({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-neutral-50 flex flex-col md:flex-row font-sans text-neutral-900 pb-20 md:pb-0">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex flex-col md:flex-row font-sans text-neutral-900 dark:text-neutral-100 pb-20 md:pb-0 transition-colors duration-200">
       {/* Mobile Topbar */}
-      <div className="md:hidden flex items-center justify-between bg-white/90 backdrop-blur-xl border-b border-neutral-200/50 p-4 sticky top-0 z-50 shadow-sm">
+      <div className="md:hidden flex items-center justify-between bg-white/90 dark:bg-neutral-900/90 backdrop-blur-xl border-b border-neutral-200/50 dark:border-neutral-800/50 p-4 sticky top-0 z-50 shadow-sm">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-emerald-600 rounded-xl flex items-center justify-center text-white font-bold shadow-sm">
             W
           </div>
-          <span className="font-bold text-neutral-900 tracking-tight text-base">Sales Rescue Kit</span>
+          <span className="font-bold text-neutral-900 dark:text-white tracking-tight text-base">Sales Rescue Kit</span>
         </div>
         <div className="flex items-center gap-1">
+          <button
+            onClick={toggleTheme}
+            className="p-2.5 text-neutral-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+          >
+            {theme === 'dark' ? <Sun size={22} /> : <Moon size={22} />}
+          </button>
           <NavLink 
             to="/help"
             className={cn(
               "p-2.5 rounded-xl transition-colors",
-              location.pathname === '/help' ? "text-emerald-600 bg-emerald-50" : "text-neutral-400"
+              location.pathname === '/help' ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-400" : "text-neutral-400"
             )}
           >
             <HelpCircle size={22} />
           </NavLink>
           <button 
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-2.5 text-neutral-600 hover:bg-neutral-100 rounded-xl transition-colors"
+            className="p-2.5 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-xl transition-colors"
           >
             {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
@@ -158,7 +169,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       </div>
 
       {/* Mobile Bottom Navigation - One-handed thumb access */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-2xl border-t border-neutral-200/60 px-2 py-2 z-50 flex items-center justify-around shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-2xl border-t border-neutral-200/60 dark:border-neutral-800/60 px-2 py-2 z-50 flex items-center justify-around shadow-[0_-4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.2)]">
         {allNavItems.filter(i => i.path === '/' || i.path === '/scripts' || i.path === '/tracker' || i.path === '/checklist').map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.path;
@@ -170,12 +181,12 @@ export default function Layout({ children }: { children: ReactNode }) {
               to={item.path}
               className={cn(
                 "flex flex-col items-center gap-1 px-3 py-2 rounded-2xl transition-all duration-200 min-w-[72px]",
-                isActive ? "text-emerald-600" : "text-neutral-400"
+                isActive ? "text-emerald-600 dark:text-emerald-400" : "text-neutral-400 dark:text-neutral-500"
               )}
             >
               <div className={cn(
                 "p-1 rounded-xl transition-all",
-                isActive ? "bg-emerald-50 scale-110" : ""
+                isActive ? "bg-emerald-50 dark:bg-emerald-900/30 scale-110" : ""
               )}>
                 <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
               </div>
@@ -187,12 +198,12 @@ export default function Layout({ children }: { children: ReactNode }) {
           onClick={() => setIsMobileMenuOpen(true)}
           className={cn(
             "flex flex-col items-center gap-1 px-3 py-2 rounded-2xl transition-all duration-200 min-w-[72px]",
-            isMobileMenuOpen ? "text-emerald-600" : "text-neutral-400"
+            isMobileMenuOpen ? "text-emerald-600 dark:text-emerald-400" : "text-neutral-400 dark:text-neutral-500"
           )}
         >
           <div className={cn(
             "p-1 rounded-xl transition-all",
-            isMobileMenuOpen ? "bg-emerald-50 scale-110" : ""
+            isMobileMenuOpen ? "bg-emerald-50 dark:bg-emerald-900/30 scale-110" : ""
           )}>
             <Menu size={22} strokeWidth={isMobileMenuOpen ? 2.5 : 2} />
           </div>
@@ -216,13 +227,13 @@ export default function Layout({ children }: { children: ReactNode }) {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="md:hidden fixed inset-y-0 right-0 z-[70] w-[85%] bg-white shadow-2xl flex flex-col"
+              className="md:hidden fixed inset-y-0 right-0 z-[70] w-[85%] bg-white dark:bg-neutral-900 shadow-2xl flex flex-col"
             >
-              <div className="p-6 border-b border-neutral-100 flex items-center justify-between">
-                <span className="font-bold text-neutral-900 text-lg">Menu</span>
+              <div className="p-6 border-b border-neutral-100 dark:border-neutral-800 flex items-center justify-between">
+                <span className="font-bold text-neutral-900 dark:text-white text-lg">Menu</span>
                 <button 
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="p-2 bg-neutral-100 text-neutral-600 rounded-full"
+                  className="p-2 bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 rounded-full"
                 >
                   <X size={20} />
                 </button>
@@ -244,14 +255,14 @@ export default function Layout({ children }: { children: ReactNode }) {
                               className={cn(
                                 "flex items-center gap-4 px-5 py-3 rounded-2xl transition-all duration-200 font-bold text-[15px]",
                                 isActive 
-                                  ? "bg-emerald-50 text-emerald-700" 
-                                  : "text-neutral-600 hover:bg-neutral-50"
+                                  ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400" 
+                                  : "text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800"
                               )}
                             >
-                              <Icon size={18} className={isActive ? "text-emerald-600" : "text-neutral-400"} />
+                              <Icon size={18} className={isActive ? "text-emerald-600 dark:text-emerald-400" : "text-neutral-400 dark:text-neutral-500"} />
                               <span className="flex-1">{item.name}</span>
                               {item.path === '/scripts' && savedScriptsCount > 0 && (
-                                <span className="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                                <span className="bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 text-[10px] px-2 py-0.5 rounded-full font-bold">
                                   {savedScriptsCount}
                                 </span>
                               )}
@@ -272,11 +283,11 @@ export default function Layout({ children }: { children: ReactNode }) {
                           className={cn(
                             "flex items-center gap-4 px-5 py-3 rounded-2xl transition-all duration-200 font-bold text-[15px]",
                             location.pathname === '/admin'
-                              ? "bg-neutral-900 text-white" 
-                              : "text-neutral-600 hover:bg-neutral-50"
+                              ? "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900" 
+                              : "text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800"
                           )}
                         >
-                          <ShieldCheck size={20} className={location.pathname === '/admin' ? "text-emerald-400" : "text-neutral-400"} />
+                          <ShieldCheck size={20} className={location.pathname === '/admin' ? "text-emerald-400 dark:text-emerald-600" : "text-neutral-400 dark:text-neutral-500"} />
                           <span className="flex-1">Admin Dashboard</span>
                         </NavLink>
                       </div>
@@ -284,19 +295,19 @@ export default function Layout({ children }: { children: ReactNode }) {
                   )}
                 </nav>
               </div>
-              <div className="p-6 border-t border-neutral-100 bg-neutral-50">
+              <div className="p-6 border-t border-neutral-100 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900">
                 <div className="flex items-center gap-3 mb-6 px-2">
-                  <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-700 dark:text-emerald-400 font-bold">
                     {user?.email.charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest leading-none mb-1">Active Buyer</p>
-                    <p className="text-sm font-bold text-neutral-900 truncate">{user?.email}</p>
+                    <p className="text-[10px] text-neutral-400 dark:text-neutral-500 font-bold uppercase tracking-widest leading-none mb-1">Active Buyer</p>
+                    <p className="text-sm font-bold text-neutral-900 dark:text-white truncate">{user?.email}</p>
                   </div>
                 </div>
                 <button 
                   onClick={handleSignOut}
-                  className="w-full flex items-center gap-3 px-5 py-4 bg-white border border-neutral-200 rounded-2xl text-red-600 font-bold text-sm shadow-sm active:bg-red-50 transition-all"
+                  className="w-full flex items-center gap-3 px-5 py-4 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-2xl text-red-600 dark:text-red-400 font-bold text-sm shadow-sm active:bg-red-50 dark:active:bg-red-900/20 transition-all"
                 >
                   <LogOut size={18} /> Sign Out
                 </button>
@@ -307,16 +318,25 @@ export default function Layout({ children }: { children: ReactNode }) {
       </AnimatePresence>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col w-72 bg-white border-r border-neutral-200 sticky top-0 h-screen overflow-y-auto shrink-0 custom-scrollbar">
+      <aside className="hidden md:flex flex-col w-72 bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800 sticky top-0 h-screen overflow-y-auto shrink-0 custom-scrollbar">
         <div className="p-6">
-          <div className="flex items-center gap-4 mb-10">
-            <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-white font-bold text-2xl shadow-sm">
-              W
+          <div className="flex items-center justify-between mb-10">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-white font-bold text-2xl shadow-sm">
+                W
+              </div>
+              <div>
+                <h1 className="font-bold text-neutral-900 dark:text-white leading-tight text-[16px] tracking-tight">Sales Rescue Kit</h1>
+                <p className="text-[10px] text-neutral-500 dark:text-neutral-400 font-bold uppercase tracking-widest mt-0.5">Profit-Lock™ Method</p>
+              </div>
             </div>
-            <div>
-              <h1 className="font-bold text-neutral-900 leading-tight text-[16px] tracking-tight">Sales Rescue Kit</h1>
-              <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest mt-0.5">Profit-Lock™ Method</p>
-            </div>
+            <button
+              onClick={toggleTheme}
+              className="p-2 text-neutral-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors bg-neutral-50 dark:bg-neutral-800 rounded-lg"
+              title="Toggle Dark Mode"
+            >
+              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
           </div>
           
           <nav className="flex flex-col gap-8">
@@ -334,16 +354,16 @@ export default function Layout({ children }: { children: ReactNode }) {
                         className={cn(
                           "flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 font-bold text-[13px]",
                           isActive 
-                            ? "bg-neutral-900 text-white shadow-md" 
-                            : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900"
+                            ? "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 shadow-md" 
+                            : "text-neutral-500 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white"
                         )}
                       >
-                        <Icon size={16} className={isActive ? "text-emerald-400" : "text-neutral-400"} />
+                        <Icon size={16} className={isActive ? "text-emerald-400 dark:text-emerald-600" : "text-neutral-400 dark:text-neutral-500"} />
                         <span className="flex-1">{item.name}</span>
                         {item.path === '/scripts' && savedScriptsCount > 0 && (
                           <span className={cn(
                             "inline-flex items-center justify-center text-[10px] px-2 py-0.5 rounded-full font-bold",
-                            isActive ? "bg-white/20 text-white" : "bg-neutral-200 text-neutral-600"
+                            isActive ? "bg-white/20 dark:bg-black/10 text-white dark:text-neutral-900" : "bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300"
                           )}>
                             {savedScriptsCount}
                           </span>
@@ -364,11 +384,11 @@ export default function Layout({ children }: { children: ReactNode }) {
                     className={cn(
                       "flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 font-bold text-[13px]",
                       location.pathname === '/admin'
-                        ? "bg-neutral-900 text-white shadow-md" 
-                        : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900"
+                        ? "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 shadow-md" 
+                        : "text-neutral-500 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white"
                     )}
                   >
-                    <ShieldCheck size={16} className={location.pathname === '/admin' ? "text-emerald-400" : "text-neutral-400"} />
+                    <ShieldCheck size={16} className={location.pathname === '/admin' ? "text-emerald-400 dark:text-emerald-600" : "text-neutral-400 dark:text-neutral-500"} />
                     <span className="flex-1">Admin Dashboard</span>
                   </NavLink>
                 </div>
@@ -377,26 +397,26 @@ export default function Layout({ children }: { children: ReactNode }) {
           </nav>
         </div>
         <div className="mt-auto p-6 space-y-4">
-          <div className="bg-neutral-50 rounded-3xl p-6 border border-neutral-100">
+          <div className="bg-neutral-50 dark:bg-neutral-800/50 rounded-3xl p-6 border border-neutral-100 dark:border-neutral-800">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-xs">
+              <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-700 dark:text-emerald-400 font-bold text-xs">
                 {user?.email.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest leading-none mb-0.5">Buyer Access</p>
-                <p className="text-[12px] font-bold text-neutral-900 truncate">{user?.email}</p>
+                <p className="text-[10px] text-neutral-400 dark:text-neutral-500 font-bold uppercase tracking-widest leading-none mb-0.5">Buyer Access</p>
+                <p className="text-[12px] font-bold text-neutral-900 dark:text-white truncate">{user?.email}</p>
               </div>
             </div>
             <button 
               onClick={handleSignOut}
-              className="w-full flex items-center justify-center gap-2 py-2 text-red-600 hover:text-red-700 font-bold text-xs transition-colors"
+              className="w-full flex items-center justify-center gap-2 py-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-bold text-xs transition-colors"
             >
               <LogOut size={14} /> Sign Out
             </button>
           </div>
-          <div className="bg-white rounded-3xl p-6 border border-neutral-200 shadow-sm">
-            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest mb-2">Need help?</p>
-            <p className="text-[13px] text-neutral-600 font-medium leading-relaxed">Check the <NavLink to="/help" className="text-emerald-600 hover:text-emerald-700 font-bold">Read Me First</NavLink> guide.</p>
+          <div className="bg-white dark:bg-neutral-900 rounded-3xl p-6 border border-neutral-200 dark:border-neutral-800 shadow-sm">
+            <p className="text-[10px] text-neutral-400 dark:text-neutral-500 font-bold uppercase tracking-widest mb-2">Need help?</p>
+            <p className="text-[13px] text-neutral-600 dark:text-neutral-400 font-medium leading-relaxed">Check the <NavLink to="/help" className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 font-bold">Read Me First</NavLink> guide.</p>
           </div>
         </div>
       </aside>
@@ -407,6 +427,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           {children}
         </div>
       </main>
+      <OnboardingTour />
     </div>
   );
 }

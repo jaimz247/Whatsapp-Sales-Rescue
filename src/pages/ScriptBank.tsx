@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Copy, Check, Search, Star, Filter, X, Zap, Clock, Share2, Settings2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { scripts, ScriptCategory } from '../data/scripts';
 import { clsx } from 'clsx';
@@ -37,6 +38,7 @@ export default function ScriptBank() {
         }
       } catch (error) {
         console.error("Error fetching profile:", error);
+        toast.error("Failed to load profile");
       }
     };
 
@@ -84,6 +86,7 @@ export default function ScriptBank() {
         setSavedScripts(loadedSaved);
       } catch (error) {
         console.error("Error fetching saved scripts:", error);
+        toast.error("Failed to load saved scripts");
       }
     };
     fetchSavedScripts();
@@ -156,6 +159,7 @@ export default function ScriptBank() {
     const finalContent = personalizeText(text);
     navigator.clipboard.writeText(finalContent);
     setCopiedId(id);
+    toast.success("Script copied to clipboard");
     
     // Add to recent scripts (keep last 10)
     setRecentScripts(prev => {
@@ -193,11 +197,14 @@ export default function ScriptBank() {
           savedAt: serverTimestamp(),
           tags: []
         });
+        toast.success("Script saved");
       } else {
         await deleteDoc(docRef);
+        toast.success("Script removed from saved");
       }
     } catch (error) {
       console.error("Error toggling saved script:", error);
+      toast.error("Failed to save script");
       // Revert optimistic update
       const revertedSaved = new Set(savedScripts);
       setSavedScripts(revertedSaved);

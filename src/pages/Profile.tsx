@@ -1,6 +1,7 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { motion } from 'motion/react';
 import { Save, Building2, CreditCard, Package, Tag, CheckCircle2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -33,6 +34,7 @@ export default function Profile() {
         }
       } catch (error) {
         console.error("Error fetching profile:", error);
+        toast.error("Failed to load profile");
       }
     };
     fetchProfile();
@@ -56,8 +58,10 @@ export default function Profile() {
       
       // Dispatch event so other components can update if needed
       window.dispatchEvent(new Event('rescueKit_profile_updated'));
+      toast.success("Profile saved successfully");
     } catch (error) {
       console.error("Error saving profile:", error);
+      toast.error("Failed to save profile");
     }
   };
 

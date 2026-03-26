@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { CheckCircle2, Circle, ArrowRight } from 'lucide-react';
+import { toast } from 'sonner';
 import { checklistData } from '../data/checklist';
 import { clsx } from 'clsx';
 import confetti from 'canvas-confetti';
@@ -31,6 +32,7 @@ export default function SetupChecklist() {
         }
       } catch (error) {
         console.error("Error fetching checklist progress:", error);
+        toast.error("Failed to load checklist progress");
       } finally {
         setIsLoaded(true);
       }
@@ -81,6 +83,7 @@ export default function SetupChecklist() {
       localStorage.setItem('rescueKit_checklist_count', newChecked.size.toString());
     } catch (error) {
       console.error("Error saving checklist progress:", error);
+      toast.error("Failed to save checklist progress");
       // Revert optimistic update
       setCheckedItems(checkedItems);
     }

@@ -96,7 +96,7 @@ async function verifyPayPalWebhook(req: express.Request) {
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT || 3000;
+  const PORT = parseInt(process.env.PORT || '3000', 10);
 
   app.use(cors());
   
@@ -204,6 +204,33 @@ async function startServer() {
       res.status(200).send('Webhook received');
     } catch (error: any) {
       console.error('❌ Flutterwave Webhook Error:', error.message);
+      res.status(500).send('Webhook Error');
+    }
+  });
+
+  // 4. Free Access Webhook (Coupon Bypass)
+  app.post("/api/webhooks/free-access", async (req, res) => {
+    try {
+      const secret = process.env.FREE_ACCESS_SECRET;
+      if (!secret) throw new Error("FREE_ACCESS_SECRET is not set");
+
+      // Check for the secret in headers or body
+      const providedSecret = req.headers['x-free-access-secret'] || req.body.secret;
+      
+      if (providedSecret !== secret) {
+        console.error("❌ Invalid free-access secret");
+        return res.status(401).send("Unauthorized");
+      }
+
+      const email = req.body.email;
+      if (!email || typeof email !== 'string') {
+        return res.status(400).send("Valid email is required");
+      }
+
+      await grantAccess(email, 'free-coupon');
+      res.status(200).send('Webhook received and access granted');
+    } catch (error: any) {
+      console.error('❌ Free Access Webhook Error:', error.message);
       res.status(500).send('Webhook Error');
     }
   });

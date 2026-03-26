@@ -101,8 +101,7 @@ export default function Access() {
     }
   }, [user, navigate]);
 
-  const handleStart = async () => {
-    await confirmAccess();
+  const handleStart = () => {
     setState('success');
     setTimeout(() => navigate('/'), 1500);
   };
