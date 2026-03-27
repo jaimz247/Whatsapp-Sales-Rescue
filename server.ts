@@ -98,7 +98,11 @@ async function startServer() {
   const app = express();
   const PORT = parseInt(process.env.PORT || '3000', 10);
 
-  app.use(cors());
+  app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-free-access-secret', 'verif-hash', 'paypal-auth-algo', 'paypal-cert-url', 'paypal-transmission-id', 'paypal-transmission-sig', 'paypal-transmission-time']
+  }));
   
   // Use JSON parser and capture raw body for signature verification
   app.use(express.json({
@@ -106,6 +110,9 @@ async function startServer() {
       (req as express.Request).rawBody = buf;
     }
   }));
+
+  // Parse URL-encoded bodies (for form data)
+  app.use(express.urlencoded({ extended: true }));
 
   // --- WEBHOOK ENDPOINTS ---
 
@@ -210,28 +217,37 @@ async function startServer() {
 
   // 4. Free Access Webhook (Coupon Bypass)
   app.post("/api/webhooks/free-access", async (req, res) => {
+    console.log("📥 Received Free Access Webhook request");
+    console.log("Headers:", { ...req.headers, authorization: '***' });
+    console.log("Body:", req.body);
+    
     try {
       const secret = process.env.FREE_ACCESS_SECRET;
-      if (!secret) throw new Error("FREE_ACCESS_SECRET is not set");
-
-      // Check for the secret in headers or body
-      const providedSecret = req.headers['x-free-access-secret'] || req.body.secret;
-      
-      if (providedSecret !== secret) {
-        console.error("❌ Invalid free-access secret");
-        return res.status(401).send("Unauthorized");
+      if (!secret) {
+        console.error("❌ FREE_ACCESS_SECRET is not set in environment variables");
+        return res.status(500).send("Server configuration error");
       }
 
-      const email = req.body.email;
+      // Check for the secret in headers or body
+      const providedSecret = req.headers['x-free-access-secret'] || req.body?.secret;
+      
+      if (providedSecret !== secret) {
+        console.error(`❌ Invalid free-access secret. Expected: ${secret}, Got: ${providedSecret}`);
+        return res.status(401).send("Unauthorized: Invalid secret");
+      }
+
+      const email = req.body?.email;
       if (!email || typeof email !== 'string') {
-        return res.status(400).send("Valid email is required");
+        console.error("❌ Missing or invalid email in payload:", req.body);
+        return res.status(400).send("Valid email is required in the payload");
       }
 
       await grantAccess(email, 'free-coupon');
+      console.log(`✅ Successfully granted free access to ${email}`);
       res.status(200).send('Webhook received and access granted');
     } catch (error: any) {
       console.error('❌ Free Access Webhook Error:', error.message);
-      res.status(500).send('Webhook Error');
+      res.status(500).send('Webhook Error: ' + error.message);
     }
   });
 
