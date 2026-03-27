@@ -10,6 +10,22 @@ import crypto from "crypto";
 
 dotenv.config();
 
+import fs from "fs";
+
+// Read Firebase config to get the database ID
+let firestoreDatabaseId = "(default)";
+try {
+  const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
+  if (fs.existsSync(configPath)) {
+    const configData = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    if (configData.firestoreDatabaseId) {
+      firestoreDatabaseId = configData.firestoreDatabaseId;
+    }
+  }
+} catch (error) {
+  console.warn("⚠️ Could not read firebase-applet-config.json, defaulting to '(default)' database.");
+}
+
 // Extend Express Request to include rawBody for Stripe and Paystack verification
 declare global {
   namespace Express {
@@ -121,7 +137,7 @@ async function startServer() {
     const adminApp = getFirebaseAdmin();
     if (!adminApp) throw new Error("Firebase Admin not configured. Cannot grant access.");
     
-    const db = getFirestore(adminApp);
+    const db = getFirestore(adminApp, firestoreDatabaseId);
     const normalizedEmail = email.toLowerCase().trim();
     
     await db.collection('allowed_users').doc(normalizedEmail).set({
