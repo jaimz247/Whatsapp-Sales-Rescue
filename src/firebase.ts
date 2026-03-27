@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail, onAuthStateChanged, signOut } from 'firebase/auth';
+import { getAuth, isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer, setDoc, serverTimestamp } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -69,6 +69,54 @@ export const completeMagicLinkSignIn = async (url: string) => {
     }
   }
   throw new Error('Invalid or expired sign-in link.');
+};
+
+export const signInWithGoogle = async () => {
+  const provider = new GoogleAuthProvider();
+  const result = await signInWithPopup(auth, provider);
+  const normalizedEmail = result.user.email?.toLowerCase().trim();
+  
+  if (!normalizedEmail) {
+    await signOut(auth);
+    throw new Error('Could not get email from Google account.');
+  }
+
+  // Always allow hardcoded admins
+  const isHardcodedAdmin = normalizedEmail === 'elevatemensah@gmail.com' || normalizedEmail === 'jaxx700@gmail.com';
+  
+  if (!isHardcodedAdmin) {
+    // Check if email is in allowed_users collection
+    const allowedUserDoc = await getDocFromServer(doc(db, 'allowed_users', normalizedEmail));
+    
+    if (!allowedUserDoc.exists()) {
+      await signOut(auth);
+      throw new Error('Unauthorized email address. Access denied. Please purchase access first.');
+    }
+  }
+
+  // Create user profile if it doesn't exist
+  const userDocRef = doc(db, 'users', result.user.uid);
+  const userDoc = await getDocFromServer(userDocRef);
+  if (!userDoc.exists()) {
+    await setDoc(userDocRef, {
+      email: result.user.email,
+      displayName: result.user.displayName || '',
+      photoURL: result.user.photoURL || '',
+      createdAt: serverTimestamp(),
+      lastLoginAt: serverTimestamp(),
+      accessStatus: 'active',
+      upgradeStatus: 'free',
+      onboardingCompleted: false,
+      role: isHardcodedAdmin ? 'admin' : 'user'
+    });
+  } else {
+    // Update last login
+    await setDoc(userDocRef, {
+      lastLoginAt: serverTimestamp()
+    }, { merge: true });
+  }
+  
+  return result.user;
 };
 
 export const logout = async () => {

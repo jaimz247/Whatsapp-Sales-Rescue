@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { auth, sendMagicLink, completeMagicLinkSignIn, logout, db } from '../firebase';
+import { auth, sendMagicLink, completeMagicLinkSignIn, signInWithGoogle, logout, db } from '../firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
@@ -15,6 +15,7 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   signIn: (email: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   confirmAccess: () => Promise<void>;
   completeSignIn: (url: string) => Promise<void>;
@@ -132,6 +133,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    setIsLoading(true);
+    try {
+      await signInWithGoogle();
+    } catch (error: any) {
+      console.error("Error signing in with Google:", error);
+      toast.error(error.message || "Failed to sign in with Google");
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSignOut = async () => {
     setIsLoading(true);
     try {
@@ -146,7 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, signIn, signOut: handleSignOut, confirmAccess, completeSignIn }}>
+    <AuthContext.Provider value={{ user, isLoading, signIn, signInWithGoogle: handleGoogleSignIn, signOut: handleSignOut, confirmAccess, completeSignIn }}>
       {children}
     </AuthContext.Provider>
   );
