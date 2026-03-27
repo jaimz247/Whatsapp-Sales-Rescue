@@ -114,11 +114,21 @@ async function startServer() {
   const app = express();
   const PORT = parseInt(process.env.PORT || '3000', 10);
 
+  // Global request logger to see exactly what is hitting the server
+  app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+  });
+
+  // Extremely permissive CORS for webhooks
   app.use(cors({
     origin: '*',
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-free-access-secret', 'verif-hash', 'paypal-auth-algo', 'paypal-cert-url', 'paypal-transmission-id', 'paypal-transmission-sig', 'paypal-transmission-time']
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: '*' // Allow all headers to prevent any CORS blocks
   }));
+  
+  // Explicitly handle preflight OPTIONS requests for all routes
+  app.options('*', cors());
   
   // Use JSON parser and capture raw body for signature verification
   app.use(express.json({
@@ -232,8 +242,9 @@ async function startServer() {
   });
 
   // 4. Free Access Webhook (Coupon Bypass)
-  app.post("/api/webhooks/free-access", async (req, res) => {
-    console.log("📥 Received Free Access Webhook request");
+  // We use two routes here in case ad-blockers block URLs containing "webhook"
+  const freeAccessHandler = async (req: express.Request, res: express.Response) => {
+    console.log(`📥 Received Free Access request on ${req.url}`);
     console.log("Headers:", { ...req.headers, authorization: '***' });
     console.log("Body:", req.body);
     
@@ -265,7 +276,10 @@ async function startServer() {
       console.error('❌ Free Access Webhook Error:', error.message);
       res.status(500).send('Webhook Error: ' + error.message);
     }
-  });
+  };
+
+  app.post("/api/webhooks/free-access", freeAccessHandler);
+  app.post("/api/access/grant-free", freeAccessHandler);
 
   // Health check endpoint
   app.get("/api/health", (req, res) => {
