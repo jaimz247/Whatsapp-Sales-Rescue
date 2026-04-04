@@ -7,6 +7,7 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import path from "path";
 import dotenv from "dotenv";
 import crypto from "crypto";
+import Stripe from "stripe";
 
 dotenv.config();
 
@@ -280,6 +281,72 @@ async function startServer() {
 
   app.post("/api/webhooks/free-access", freeAccessHandler);
   app.post("/api/access/grant-free", freeAccessHandler);
+
+  // 5. Stripe Webhook
+  app.post("/api/webhooks/stripe", async (req, res) => {
+    try {
+      const stripeSecret = process.env.STRIPE_SECRET_KEY;
+      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+      
+      if (!stripeSecret || !webhookSecret) {
+        throw new Error("Stripe keys not configured");
+      }
+
+      const stripe = new Stripe(stripeSecret, { apiVersion: '2025-02-24.acacia' });
+      const signature = req.headers['stripe-signature'];
+
+      if (!signature) {
+        return res.status(400).send('Missing stripe-signature header');
+      }
+
+      let event;
+      try {
+        event = stripe.webhooks.constructEvent(req.rawBody as Buffer, signature, webhookSecret);
+      } catch (err: any) {
+        console.error(`❌ Stripe signature verification failed: ${err.message}`);
+        return res.status(400).send(`Webhook Error: ${err.message}`);
+      }
+
+      console.log("✅ Verified Stripe Webhook:", event.type);
+
+      if (event.type === 'checkout.session.completed' || event.type === 'payment_intent.succeeded') {
+        const dataObject = event.data.object as any;
+        const email = dataObject.customer_details?.email || dataObject.receipt_email;
+        
+        if (email) {
+          await grantAccess(email, 'stripe');
+        }
+      }
+
+      res.status(200).send('Webhook received');
+    } catch (error: any) {
+      console.error('❌ Stripe Webhook Error:', error.message);
+      res.status(500).send('Webhook Error');
+    }
+  });
+
+  // 6. Selar Webhook
+  app.post("/api/webhooks/selar", async (req, res) => {
+    try {
+      // Selar doesn't have a strict signature verification by default, 
+      // but it's recommended to check a custom header or secret if configured.
+      // We'll accept the payload and extract the customer email.
+      const event = req.body;
+      console.log("✅ Received Selar Webhook");
+      
+      // Selar payload usually has data.customer.email
+      const email = event.data?.customer?.email || event.customer?.email;
+      
+      if (email) {
+        await grantAccess(email, 'selar');
+      }
+
+      res.status(200).send('Webhook received');
+    } catch (error: any) {
+      console.error('❌ Selar Webhook Error:', error.message);
+      res.status(500).send('Webhook Error');
+    }
+  });
 
   // Health check endpoint
   app.get("/api/health", (req, res) => {

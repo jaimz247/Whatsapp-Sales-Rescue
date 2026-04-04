@@ -7,7 +7,7 @@ import { isToday, isBefore, startOfToday } from 'date-fns';
 import { scripts } from '../data/scripts';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase';
-import { doc, getDoc, setDoc, collection, getDocs, query } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs, query, where } from 'firebase/firestore';
 
 export default function Dashboard() {
   const [completedChecklistItems, setCompletedChecklistItems] = useState(0);
@@ -41,12 +41,9 @@ export default function Dashboard() {
         }
 
         // Check saved scripts
-        const savedScriptsQuery = query(collection(db, 'saved_scripts'));
+        const savedScriptsQuery = query(collection(db, 'saved_scripts'), where('userId', '==', user.uid));
         const savedScriptsSnap = await getDocs(savedScriptsQuery);
-        let count = 0;
-        savedScriptsSnap.forEach(doc => {
-          if (doc.data().userId === user.uid) count++;
-        });
+        let count = savedScriptsSnap.size;
         setSavedScriptsCount(count);
 
         // Load checklist progress
@@ -62,7 +59,7 @@ export default function Dashboard() {
         }
 
         // Load tracker data
-        const trackerQuery = query(collection(db, 'tracker_items'));
+        const trackerQuery = query(collection(db, 'tracker_items'), where('userId', '==', user.uid));
         const trackerSnap = await getDocs(trackerQuery);
         let dueCount = 0;
         let potential = 0;
@@ -72,21 +69,19 @@ export default function Dashboard() {
 
         trackerSnap.forEach(doc => {
           const data = doc.data();
-          if (data.userId === user.uid) {
-            totalLeads++;
-            
-            if (data.followUpDate && data.stage !== 'Paid' && data.stage !== 'Delivered') {
-              const followUpDate = new Date(data.followUpDate);
-              if (isToday(followUpDate) || isBefore(followUpDate, today)) {
-                dueCount++;
-              }
+          totalLeads++;
+          
+          if (data.followUpDate && data.stage !== 'Paid' && data.stage !== 'Delivered') {
+            const followUpDate = new Date(data.followUpDate);
+            if (isToday(followUpDate) || isBefore(followUpDate, today)) {
+              dueCount++;
             }
+          }
 
-            if (data.stage !== 'Paid' && data.stage !== 'Delivered') {
-              potential += (Number(data.value) || 0);
-            } else if (data.stage === 'Paid' || data.stage === 'Delivered') {
-              closed += (Number(data.value) || 0);
-            }
+          if (data.stage !== 'Paid' && data.stage !== 'Delivered') {
+            potential += (Number(data.value) || 0);
+          } else if (data.stage === 'Paid' || data.stage === 'Delivered') {
+            closed += (Number(data.value) || 0);
           }
         });
         

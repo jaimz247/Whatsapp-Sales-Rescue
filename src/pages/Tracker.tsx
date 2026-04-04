@@ -6,7 +6,7 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase';
-import { collection, doc, getDocs, setDoc, deleteDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, deleteDoc, serverTimestamp, query, orderBy, where } from 'firebase/firestore';
 
 type LeadStage = 'New Inquiry' | 'Interested' | 'Hot Lead' | 'Awaiting Payment' | 'Paid' | 'Delivered' | 'Repeat Customer';
 
@@ -58,27 +58,28 @@ export default function Tracker() {
     const fetchLeads = async () => {
       if (!user) return;
       try {
-        const q = query(collection(db, 'tracker_items'), orderBy('createdAt', 'desc'));
+        const q = query(collection(db, 'tracker_items'), where('userId', '==', user.uid));
         const querySnapshot = await getDocs(q);
         
         const loadedLeads: Lead[] = [];
         querySnapshot.forEach((doc) => {
           const data = doc.data();
-          if (data.userId === user.uid) {
-            loadedLeads.push({
-              id: doc.id,
-              name: data.leadName || '',
-              phone: data.phone || '', // keeping phone in local state if needed, or remove it
-              product: data.productOrService || '',
-              value: data.value || 0,
-              stage: data.stage as LeadStage,
-              nextFollowUp: data.followUpDate || '',
-              lastContacted: data.lastContactedAt ? data.lastContactedAt.toMillis() : null,
-              notes: data.notes || '',
-              createdAt: data.createdAt ? data.createdAt.toMillis() : Date.now(),
-            });
-          }
+          loadedLeads.push({
+            id: doc.id,
+            name: data.leadName || '',
+            phone: data.phone || '', // keeping phone in local state if needed, or remove it
+            product: data.productOrService || '',
+            value: data.value || 0,
+            stage: data.stage as LeadStage,
+            nextFollowUp: data.followUpDate || '',
+            lastContacted: data.lastContactedAt ? data.lastContactedAt.toMillis() : null,
+            notes: data.notes || '',
+            createdAt: data.createdAt ? data.createdAt.toMillis() : Date.now(),
+          });
         });
+        
+        // Sort by createdAt desc
+        loadedLeads.sort((a, b) => b.createdAt - a.createdAt);
         
         setLeads(loadedLeads);
       } catch (error) {

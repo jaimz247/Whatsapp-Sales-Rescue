@@ -97,5 +97,11 @@ service cloud.firestore {
                     (!('leadName' in request.resource.data) || request.resource.data.leadName.size() <= 100) &&
                     (!('notes' in request.resource.data) || request.resource.data.notes.size() <= 5000);
     }
+    // Referrals Collection
+    match /referrals/{referralId} {
+      allow read, delete: if isAdmin();
+      allow create: if isAuthenticated();
+      allow update: if isAdmin();
+    }
   }
 }

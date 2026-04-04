@@ -7,7 +7,7 @@ import { scripts, ScriptCategory } from '../data/scripts';
 import { clsx } from 'clsx';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase';
-import { collection, doc, getDocs, getDoc, setDoc, deleteDoc, serverTimestamp, query } from 'firebase/firestore';
+import { collection, doc, getDocs, getDoc, setDoc, deleteDoc, serverTimestamp, query, where } from 'firebase/firestore';
 
 export default function ScriptBank() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -74,14 +74,12 @@ export default function ScriptBank() {
     const fetchSavedScripts = async () => {
       if (!user) return;
       try {
-        const q = query(collection(db, 'saved_scripts'));
+        const q = query(collection(db, 'saved_scripts'), where('userId', '==', user.uid));
         const querySnapshot = await getDocs(q);
         
         const loadedSaved = new Set<string>();
         querySnapshot.forEach((doc) => {
-          if (doc.data().userId === user.uid) {
-            loadedSaved.add(doc.data().scriptId);
-          }
+          loadedSaved.add(doc.data().scriptId);
         });
         setSavedScripts(loadedSaved);
       } catch (error) {
