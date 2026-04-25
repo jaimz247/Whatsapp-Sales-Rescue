@@ -328,14 +328,29 @@ async function startServer() {
   // 6. Selar Webhook
   app.post("/api/webhooks/selar", async (req, res) => {
     try {
-      // Selar doesn't have a strict signature verification by default, 
-      // but it's recommended to check a custom header or secret if configured.
-      // We'll accept the payload and extract the customer email.
       const event = req.body;
-      console.log("✅ Received Selar Webhook");
+      console.log("✅ Received Selar Webhook", JSON.stringify(event));
       
-      // Selar payload usually has data.customer.email
-      const email = event.data?.customer?.email || event.customer?.email;
+      const adminApp = getFirebaseAdmin();
+      if (adminApp) {
+        const db = getFirestore(adminApp, firestoreDatabaseId);
+        await db.collection('webhook_logs').add({
+          provider: 'selar',
+          payload: event,
+          createdAt: FieldValue.serverTimestamp()
+        });
+      }
+      
+      // Selar payload variations
+      let email = null;
+      if (typeof event === 'string') {
+        try {
+          const parsed = JSON.parse(event);
+          email = parsed.data?.customer?.email || parsed.customer?.email || parsed.email || parsed.data?.email;
+        } catch (e) {}
+      } else {
+        email = event.data?.customer?.email || event.customer?.email || event.email || event.data?.email;
+      }
       
       if (email) {
         await grantAccess(email, 'selar');
