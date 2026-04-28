@@ -298,10 +298,12 @@ async function startServer() {
       if (!signature) {
         return res.status(400).send('Missing stripe-signature header');
       }
+      
+      const sigString = Array.isArray(signature) ? signature[0] : signature;
 
       let event;
       try {
-        event = stripe.webhooks.constructEvent(req.rawBody as Buffer, signature, webhookSecret);
+        event = stripe.webhooks.constructEvent(req.rawBody as Buffer, sigString, webhookSecret);
       } catch (err: any) {
         console.error(`❌ Stripe signature verification failed: ${err.message}`);
         return res.status(400).send(`Webhook Error: ${err.message}`);
