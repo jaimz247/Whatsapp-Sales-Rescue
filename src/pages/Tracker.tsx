@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Search, Trash2, Edit2, CheckCircle2, Clock, X, Target, Flame, Calendar, CheckCircle, MessageCircle, Send } from 'lucide-react';
+import { Plus, Search, Trash2, Edit2, CheckCircle2, Clock, X, Target, Flame, Calendar, CheckCircle, MessageCircle, Send, CheckSquare, Square, Users, Zap, Bot } from 'lucide-react';
 import { clsx } from 'clsx';
-import { format } from 'date-fns';
+import { format, differenceInDays } from 'date-fns';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase';
-import { collection, doc, getDocs, setDoc, deleteDoc, serverTimestamp, query, orderBy, where } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, deleteDoc, serverTimestamp, query, orderBy, where, writeBatch } from 'firebase/firestore';
 
 type LeadStage = 'New Inquiry' | 'Interested' | 'Hot Lead' | 'Awaiting Payment' | 'Paid' | 'Delivered' | 'Repeat Customer';
 
@@ -37,6 +37,31 @@ const STAGE_COLORS: Record<LeadStage, string> = {
   'Repeat Customer': 'bg-indigo-50 text-indigo-700 border-indigo-200',
 };
 
+const calculateLeadScore = (lead: Lead) => {
+  let score = 0;
+  
+  // Base score from stage
+  if (lead.stage === 'Hot Lead') score += 30;
+  else if (lead.stage === 'Awaiting Payment') score += 20;
+  else if (lead.stage === 'Interested') score += 10;
+  else if (lead.stage === 'New Inquiry') score += 5;
+
+  // Engagement points
+  if (lead.lastContacted) {
+    const daysSince = differenceInDays(new Date(), new Date(lead.lastContacted));
+    if (daysSince <= 1) score += 15;
+    else if (daysSince <= 3) score += 10;
+    else if (daysSince <= 7) score += 5;
+    else if (daysSince > 14) score -= 10;
+  }
+
+  // Completeness
+  if (lead.phone) score += 5;
+  if (lead.value > 0) score += 5;
+
+  return Math.max(0, Math.min(100, score)); // Max 100
+};
+
 export default function Tracker() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -45,6 +70,13 @@ export default function Tracker() {
   const [activeFilter, setActiveFilter] = useState<LeadStage | 'All' | 'Due Today'>('All');
   const { user } = useAuth();
   
+  // Selection
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [isBulkStageModalOpen, setIsBulkStageModalOpen] = useState(false);
+  const [isBulkDateModalOpen, setIsBulkDateModalOpen] = useState(false);
+  const [bulkStage, setBulkStage] = useState<LeadStage>('Interested');
+  const [bulkDate, setBulkDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+
   // Quick add state
   const [quickName, setQuickName] = useState('');
   
@@ -53,6 +85,9 @@ export default function Tracker() {
   const [formData, setFormData] = useState<Partial<Lead>>({
     name: '', phone: '', product: '', stage: 'New Inquiry', nextFollowUp: '', notes: ''
   });
+
+  const [isAutomating, setIsAutomating] = useState(false);
+
 
   useEffect(() => {
     const fetchLeads = async () => {
@@ -198,6 +233,11 @@ export default function Tracker() {
     // For now, I'll just delete it directly to fix the iframe issue.
     // Optimistic update
     setLeads(leads.filter(l => l.id !== id));
+    setSelectedLeadIds(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(id);
+      return newSet;
+    });
     
     try {
       await deleteDoc(doc(db, 'tracker_items', id));
@@ -205,6 +245,137 @@ export default function Tracker() {
     } catch (error) {
       console.error("Error deleting lead:", error);
       toast.error("Failed to delete lead");
+    }
+  };
+
+  const toggleLeadSelection = (id: string) => {
+    setSelectedLeadIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      return newSet;
+    });
+  };
+
+  const toggleAllSelection = (filteredIds: string[]) => {
+    if (selectedLeadIds.size === filteredIds.length) {
+      setSelectedLeadIds(new Set());
+    } else {
+      setSelectedLeadIds(new Set(filteredIds));
+    }
+  };
+
+  const handleBulkStageChange = async () => {
+    if (!user || selectedLeadIds.size === 0) return;
+    const batch = writeBatch(db);
+    
+    // optimistically update
+    setLeads(leads.map(l => selectedLeadIds.has(l.id) ? { ...l, stage: bulkStage } : l));
+    
+    try {
+      selectedLeadIds.forEach(id => {
+        batch.update(doc(db, 'tracker_items', id), {
+          stage: bulkStage,
+          updatedAt: serverTimestamp()
+        });
+      });
+      await batch.commit();
+      toast.success(`Updated ${selectedLeadIds.size} leads to ${bulkStage}`);
+      setSelectedLeadIds(new Set());
+      setIsBulkStageModalOpen(false);
+    } catch (err) {
+      console.error("Batch update error:", err);
+      toast.error("Failed to update leads");
+    }
+  };
+
+  const handleBulkDateChange = async () => {
+    if (!user || selectedLeadIds.size === 0) return;
+    const batch = writeBatch(db);
+    
+    // optimistically update
+    setLeads(leads.map(l => selectedLeadIds.has(l.id) ? { ...l, nextFollowUp: bulkDate } : l));
+    
+    try {
+      selectedLeadIds.forEach(id => {
+        batch.update(doc(db, 'tracker_items', id), {
+          followUpDate: bulkDate,
+          updatedAt: serverTimestamp()
+        });
+      });
+      await batch.commit();
+      toast.success(`Assigned follow-up date to ${selectedLeadIds.size} leads`);
+      setSelectedLeadIds(new Set());
+      setIsBulkDateModalOpen(false);
+    } catch (err) {
+      console.error("Batch update error:", err);
+      toast.error("Failed to update leads");
+    }
+  };
+
+  const handleBulkWhatsApp = () => {
+    if (selectedLeadIds.size === 0) return;
+    const selectedLeads = leads.filter(l => selectedLeadIds.has(l.id) && l.phone);
+    if (selectedLeads.length === 0) {
+      toast.error("No valid phone numbers selected");
+      return;
+    }
+    
+    toast.success(`Opening WhatsApp for ${selectedLeads.length} leads. Please send them individually.`);
+    selectedLeads.forEach((lead, index) => {
+      setTimeout(() => {
+        window.open(`https://wa.me/${lead.phone.replace(/\D/g, '')}`, '_blank');
+      }, index * 1000); // Stagger opens to prevent browser block
+    });
+    setSelectedLeadIds(new Set());
+  };
+
+  const handleAutomatedFollowUp = async () => {
+    if (!user) return;
+    setIsAutomating(true);
+    
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const autoLeads = leads.filter(l => 
+      (l.stage === 'Awaiting Payment' || l.stage === 'Hot Lead') && 
+      l.nextFollowUp === todayStr &&
+      l.phone
+    );
+
+    if (autoLeads.length === 0) {
+      toast.info("No hot leads due for follow-up today.");
+      setIsAutomating(false);
+      return;
+    }
+
+    const batch = writeBatch(db);
+    try {
+      toast.success(`Triggering follow-up for ${autoLeads.length} leads...`);
+      autoLeads.forEach((lead, index) => {
+        setTimeout(() => {
+           let message = "Hi! Just following up with you regarding your inquiry.";
+           if (lead.stage === 'Awaiting Payment') {
+             message = "Hi! Just a quick follow-up to see if you have any questions before completing your payment for " + lead.product + ".";
+           } else if (lead.stage === 'Hot Lead') {
+             message = "Hi! Just checking in to see if you're ready to proceed with " + lead.product + ".";
+           }
+           window.open(`https://wa.me/${lead.phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
+        }, index * 1500);
+
+        // Update last contacted
+        batch.update(doc(db, 'tracker_items', lead.id), {
+          lastContactedAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      });
+
+      await batch.commit();
+
+      setLeads(leads.map(l => autoLeads.some(al => al.id === l.id) ? { ...l, lastContacted: Date.now() } : l));
+      toast.success("Automated follow-ups completed.");
+    } catch (e) {
+      toast.error("Error automating follow-ups");
+    } finally {
+      setIsAutomating(false);
     }
   };
 
@@ -342,6 +513,31 @@ export default function Tracker() {
           </p>
         </div>
       </div>
+
+      {/* Automated Follow-up Banner */}
+      <motion.div 
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-blue-600 border border-blue-500 rounded-2xl p-4 shadow-lg shadow-blue-600/20 mb-8 flex flex-col md:flex-row items-center justify-between gap-4"
+      >
+        <div className="flex items-center gap-3 text-white">
+          <div className="bg-white/20 p-2 rounded-xl backdrop-blur-sm">
+            <Bot size={20} />
+          </div>
+          <div>
+            <h3 className="font-bold text-[15px]">Automated Follow-ups</h3>
+            <p className="text-blue-100 text-[13px]">Send quick check-ins to all your Hot Leads & Awaiting Payment leads due today.</p>
+          </div>
+        </div>
+        <button
+          onClick={handleAutomatedFollowUp}
+          disabled={isAutomating}
+          className="w-full md:w-auto bg-white text-blue-600 px-6 py-2.5 rounded-xl font-bold text-[14px] hover:bg-blue-50 transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-70"
+        >
+          {isAutomating ? <Clock size={16} className="animate-spin" /> : <Send size={16} />}
+          Trigger Now
+        </button>
+      </motion.div>
 
       {/* Daily Close-Out Routine */}
       <div className="bg-neutral-900 text-white rounded-[2.5rem] p-8 md:p-10 shadow-xl mb-12 relative overflow-hidden">
@@ -484,6 +680,46 @@ export default function Tracker() {
         </div>
       </div>
 
+      {/* Bulk Action Bar */}
+      <AnimatePresence>
+        {selectedLeadIds.size > 0 && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-neutral-900 border border-neutral-700 text-white px-6 py-4 rounded-2xl shadow-xl flex items-center gap-6"
+          >
+            <div className="font-bold whitespace-nowrap">
+              <span className="text-emerald-400">{selectedLeadIds.size}</span> Selected
+            </div>
+            <div className="h-6 w-px bg-neutral-700"></div>
+            <div className="flex items-center gap-3 overflow-x-auto hide-scrollbar">
+              <button 
+                onClick={() => setIsBulkStageModalOpen(true)}
+                className="bg-neutral-800 hover:bg-neutral-700 px-4 py-2 rounded-xl text-[13px] font-bold transition-colors whitespace-nowrap"
+              >
+                Change Stage
+              </button>
+              <button 
+                onClick={() => setIsBulkDateModalOpen(true)}
+                className="bg-neutral-800 hover:bg-neutral-700 px-4 py-2 rounded-xl text-[13px] font-bold transition-colors whitespace-nowrap"
+              >
+                Set Follow-up
+              </button>
+              <button 
+                onClick={handleBulkWhatsApp}
+                className="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-xl text-[13px] font-bold transition-colors whitespace-nowrap flex items-center gap-2"
+              >
+                <MessageCircle size={14} /> Group Message
+              </button>
+            </div>
+            <button onClick={() => setSelectedLeadIds(new Set())} className="text-neutral-400 hover:text-white p-1 ml-auto">
+              <X size={18} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Table/List View */}
       <div className="bg-white border border-neutral-200 rounded-3xl shadow-sm overflow-hidden">
         {filteredLeads.length === 0 ? (
@@ -523,7 +759,16 @@ export default function Tracker() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-neutral-50/80 border-b border-neutral-200 text-[10px] font-bold uppercase tracking-widest text-neutral-400">
-                    <th className="p-5 pl-8">Name / Phone</th>
+                    <th className="p-5 pl-8 w-12">
+                      <button 
+                        onClick={() => toggleAllSelection(filteredLeads.map(l => l.id))}
+                        className="text-neutral-400 hover:text-emerald-600"
+                      >
+                        {selectedLeadIds.size === filteredLeads.length && filteredLeads.length > 0 ? <CheckSquare size={16} className="text-emerald-600" /> : <Square size={16} />}
+                      </button>
+                    </th>
+                    <th className="p-5">Name / Phone</th>
+                    <th className="p-5">Score</th>
                     <th className="p-5">Value</th>
                     <th className="p-5">Stage</th>
                     <th className="p-5">Next Follow-up</th>
@@ -531,9 +776,19 @@ export default function Tracker() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
-                  {filteredLeads.map(lead => (
-                    <tr key={lead.id} className="hover:bg-neutral-50/50 transition-colors group">
+                  {filteredLeads.map(lead => {
+                    const score = calculateLeadScore(lead);
+                    return (
+                    <tr key={lead.id} className={clsx("hover:bg-neutral-50/50 transition-colors group", selectedLeadIds.has(lead.id) && "bg-emerald-50/30")}>
                       <td className="p-5 pl-8">
+                        <button 
+                          onClick={() => toggleLeadSelection(lead.id)}
+                          className="text-neutral-400 hover:text-emerald-600"
+                        >
+                          {selectedLeadIds.has(lead.id) ? <CheckSquare size={16} className="text-emerald-600" /> : <Square size={16} />}
+                        </button>
+                      </td>
+                      <td className="p-5">
                         <div className="flex items-center gap-2">
                           <p className="font-bold text-neutral-900 text-[14px]">{lead.name}</p>
                           {lead.stage === 'Hot Lead' && (
@@ -541,6 +796,12 @@ export default function Tracker() {
                           )}
                         </div>
                         <p className="text-[12px] text-neutral-500 mt-0.5">{lead.product || 'No product'}</p>
+                      </td>
+                      <td className="p-5">
+                        <div className="flex items-center gap-1.5 bg-neutral-100 px-2 py-1 rounded-lg w-fit">
+                          <Zap size={12} className={score >= 70 ? "text-orange-500 fill-orange-500" : "text-neutral-400"} />
+                          <span className={clsx("text-[12px] font-bold", score >= 70 ? "text-orange-600" : "text-neutral-600")}>{score}/100</span>
+                        </div>
                       </td>
                       <td className="p-5">
                         <p className="font-bold text-neutral-900 text-[14px]">₦{(lead.value || 0).toLocaleString()}</p>
@@ -592,16 +853,27 @@ export default function Tracker() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
             {/* Mobile List View */}
             <div className="md:hidden divide-y divide-neutral-100">
-              {filteredLeads.map(lead => (
-                <div key={lead.id} className="p-5 active:bg-neutral-50 transition-colors">
-                  <div className="flex justify-between items-start mb-4">
+              {filteredLeads.map(lead => {
+                const score = calculateLeadScore(lead);
+                return (
+                <div key={lead.id} className="p-5 active:bg-neutral-50 transition-colors relative">
+                  <div className="absolute top-5 right-5 z-10">
+                    <button 
+                      onClick={() => toggleLeadSelection(lead.id)}
+                      className="text-neutral-400 hover:text-emerald-600 p-2 -m-2"
+                    >
+                      {selectedLeadIds.has(lead.id) ? <CheckSquare size={18} className="text-emerald-600" /> : <Square size={18} />}
+                    </button>
+                  </div>
+                  <div className="flex justify-between items-start mb-4 pr-10">
                     <div className="flex-1 pr-4">
                       <div className="flex items-center gap-2 mb-1">
                         <h4 className="font-bold text-neutral-900 text-base tracking-tight">{lead.name}</h4>
@@ -609,8 +881,17 @@ export default function Tracker() {
                           <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse shadow-sm shadow-orange-500/50"></span>
                         )}
                       </div>
-                      <p className="text-[13px] text-neutral-500 font-medium">{lead.product || 'No product'}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-[13px] text-neutral-500 font-medium">{lead.product || 'No product'}</p>
+                        <span className="text-neutral-300">•</span>
+                        <div className="flex items-center gap-1">
+                          <Zap size={10} className={score >= 70 ? "text-orange-500 fill-orange-500" : "text-neutral-400"} />
+                          <span className={clsx("text-[10px] font-bold", score >= 70 ? "text-orange-600" : "text-neutral-600")}>{score} pts</span>
+                        </div>
+                      </div>
                     </div>
+                  </div>
+                  <div className="flex justify-between items-center mb-4">
                     <span className={clsx("px-2.5 py-1 rounded-lg text-[9px] font-bold border uppercase tracking-wider shrink-0", STAGE_COLORS[lead.stage])}>
                       {lead.stage}
                     </span>
@@ -664,7 +945,8 @@ export default function Tracker() {
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
@@ -677,6 +959,42 @@ export default function Tracker() {
       >
         <Plus size={28} />
       </button>
+
+      {/* Bulk Stage Modal */}
+      <AnimatePresence>
+        {isBulkStageModalOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsBulkStageModalOpen(false)} className="absolute inset-0 bg-neutral-900/40 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm relative z-10 p-6">
+              <h3 className="text-lg font-bold text-neutral-900 mb-4">Change Stage ({selectedLeadIds.size} leads)</h3>
+              <select value={bulkStage} onChange={e => setBulkStage(e.target.value as LeadStage)} className="w-full p-4 bg-neutral-50 border border-neutral-200 rounded-2xl outline-none text-[14px] font-medium transition-all mb-6">
+                {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <div className="flex gap-3">
+                <button onClick={() => setIsBulkStageModalOpen(false)} className="flex-1 py-3 bg-neutral-100 text-neutral-600 font-bold rounded-xl">Cancel</button>
+                <button onClick={handleBulkStageChange} className="flex-1 py-3 bg-neutral-900 text-white font-bold rounded-xl">Apply</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Bulk Date Modal */}
+      <AnimatePresence>
+        {isBulkDateModalOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsBulkDateModalOpen(false)} className="absolute inset-0 bg-neutral-900/40 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm relative z-10 p-6">
+              <h3 className="text-lg font-bold text-neutral-900 mb-4">Set Follow-up ({selectedLeadIds.size} leads)</h3>
+              <input type="date" value={bulkDate} onChange={e => setBulkDate(e.target.value)} className="w-full p-4 bg-neutral-50 border border-neutral-200 rounded-2xl outline-none text-[14px] font-medium transition-all mb-6" />
+              <div className="flex gap-3">
+                <button onClick={() => setIsBulkDateModalOpen(false)} className="flex-1 py-3 bg-neutral-100 text-neutral-600 font-bold rounded-xl">Cancel</button>
+                <button onClick={handleBulkDateChange} className="flex-1 py-3 bg-neutral-900 text-white font-bold rounded-xl">Apply</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Modal */}
       <AnimatePresence>

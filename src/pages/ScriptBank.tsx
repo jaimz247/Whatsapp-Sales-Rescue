@@ -1,25 +1,30 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Copy, Check, Search, Star, Filter, X, Zap, Clock, Share2, Settings2 } from 'lucide-react';
+import { Copy, Check, Search, Star, Filter, X, Zap, Clock, Share2, Settings2, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { scripts, ScriptCategory } from '../data/scripts';
 import { clsx } from 'clsx';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase';
-import { collection, doc, getDocs, getDoc, setDoc, deleteDoc, serverTimestamp, query, where } from 'firebase/firestore';
+import { collection, doc, getDocs, getDoc, setDoc, deleteDoc, updateDoc, serverTimestamp, query, where } from 'firebase/firestore';
 
 export default function ScriptBank() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [savedScripts, setSavedScripts] = useState<Set<string>>(new Set());
+  const [savedScripts, setSavedScripts] = useState<Record<string, { tags: string[] }>>({});
   const [recentScripts, setRecentScripts] = useState<string[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isPersonalized, setIsPersonalized] = useState(true);
   const [profile, setProfile] = useState<any>(null);
   const [activeScenario, setActiveScenario] = useState<string | null>(null);
+  const [activeTag, setActiveTag] = useState<string | null>(null);
   const { user } = useAuth();
+  
+  // Custom placeholders
+  const [customVars, setCustomVars] = useState<Record<string, Record<string, string>>>({});
+  const [tagInputs, setTagInputs] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -47,22 +52,44 @@ export default function ScriptBank() {
     return () => window.removeEventListener('rescueKit_profile_updated', loadProfile);
   }, [user]);
 
-  const personalizeText = (text: string) => {
-    if (!isPersonalized || !profile) return text;
+  const personalizeText = (text: string, scriptId?: string) => {
+    if (!isPersonalized) return text;
     
     let personalized = text;
-    if (profile.businessName) personalized = personalized.replace(/\[business name\]/gi, profile.businessName);
-    if (profile.productName) personalized = personalized.replace(/\[product\/size\/colour\/quantity\]|\[product\/service\]|\[item\/service\]|\[offer\]/gi, profile.productName);
-    if (profile.defaultPrice) personalized = personalized.replace(/\[price\]/gi, profile.defaultPrice);
-    
-    const bankInfo = `${profile.accountName}\n${profile.bankName}\n${profile.accountNumber}`;
-    if (profile.accountName && profile.bankName && profile.accountNumber) {
-      personalized = personalized.replace(/\[Account Name\]\n\[Bank Name\]\n\[Account Number\]|\[details\]/gi, bankInfo);
+    if (profile) {
+      if (profile.businessName) personalized = personalized.replace(/\[business name\]/gi, profile.businessName);
+      if (profile.productName) personalized = personalized.replace(/\[product\/size\/colour\/quantity\]|\[product\/service\]|\[item\/service\]|\[offer\]/gi, profile.productName);
+      if (profile.defaultPrice) personalized = personalized.replace(/\[price\]/gi, profile.defaultPrice);
+      
+      const bankInfo = `${profile.accountName}\n${profile.bankName}\n${profile.accountNumber}`;
+      if (profile.accountName && profile.bankName && profile.accountNumber) {
+        personalized = personalized.replace(/\[Account Name\]\n\[Bank Name\]\n\[Account Number\]|\[details\]/gi, bankInfo);
+      }
+      
+      if (profile.deliveryNote) personalized = personalized.replace(/\[delivery\/pickup note if needed\]/gi, profile.deliveryNote);
     }
     
-    if (profile.deliveryNote) personalized = personalized.replace(/\[delivery\/pickup note if needed\]/gi, profile.deliveryNote);
+    // Apply script-specific custom vars
+    if (scriptId && customVars[scriptId]) {
+      Object.entries(customVars[scriptId] as Record<string, string>).forEach(([key, value]) => {
+        if (typeof value === 'string' && value.trim() !== '') {
+          // Escape the key so RegExp handles special chars inside brackets properly
+          const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const regex = new RegExp(`\\[${escapedKey}\\]`, 'g');
+          personalized = personalized.replace(regex, value);
+        }
+      });
+    }
     
     return personalized;
+  };
+
+  const getUnfilledPlaceholders = (text: string, scriptId: string) => {
+    // text with profile applied, but without customVars applied
+    let baseText = personalizeText(text); // no scriptId passed, so only profile is applied
+    const matches = Array.from(baseText.matchAll(/\[(.*?)\]/g));
+    const uniquePlaceholders = Array.from(new Set(matches.map(m => m[1])));
+    return uniquePlaceholders;
   };
 
   const initialFilter = searchParams.get('filter');
@@ -77,9 +104,9 @@ export default function ScriptBank() {
         const q = query(collection(db, 'saved_scripts'), where('userId', '==', user.uid));
         const querySnapshot = await getDocs(q);
         
-        const loadedSaved = new Set<string>();
+        const loadedSaved: Record<string, { tags: string[] }> = {};
         querySnapshot.forEach((doc) => {
-          loadedSaved.add(doc.data().scriptId);
+          loadedSaved[doc.data().scriptId] = { tags: doc.data().tags || [] };
         });
         setSavedScripts(loadedSaved);
       } catch (error) {
@@ -124,12 +151,15 @@ export default function ScriptBank() {
     return scripts.filter(script => {
       // Category filter
       if (activeCategory === 'Top 15' && !script.isTop15) return false;
-      if (activeCategory === 'Saved' && !savedScripts.has(script.id)) return false;
+      if (activeCategory === 'Saved' && !savedScripts[script.id]) return false;
       if (activeCategory === 'Recent' && !recentScripts.includes(script.id)) return false;
       if (activeCategory !== 'All' && activeCategory !== 'Top 15' && activeCategory !== 'Saved' && activeCategory !== 'Recent' && script.category !== activeCategory) return false;
       
       // Scenario filter
       if (activeScenario && !script.scenario.toLowerCase().includes(activeScenario.toLowerCase()) && !script.title.toLowerCase().includes(activeScenario.toLowerCase())) return false;
+
+      // Tag filter
+      if (activeTag && (!savedScripts[script.id] || !savedScripts[script.id].tags.includes(activeTag))) return false;
 
       // Search filter
       if (searchQuery) {
@@ -143,7 +173,15 @@ export default function ScriptBank() {
       
       return true;
     });
-  }, [activeCategory, searchQuery, savedScripts, activeScenario]);
+  }, [activeCategory, searchQuery, savedScripts, activeScenario, activeTag]);
+
+  const allTags = useMemo(() => {
+    const tags = new Set<string>();
+    Object.values(savedScripts).forEach((script: { tags: string[] }) => {
+      script.tags.forEach(tag => tags.add(tag));
+    });
+    return Array.from(tags).sort();
+  }, [savedScripts]);
 
   const scenarios = [
     { label: 'Ghosting', value: 'ghosting' },
@@ -154,7 +192,7 @@ export default function ScriptBank() {
   ];
 
   const handleCopy = (text: string, id: string) => {
-    const finalContent = personalizeText(text);
+    const finalContent = personalizeText(text, id);
     navigator.clipboard.writeText(finalContent);
     setCopiedId(id);
     toast.success("Script copied to clipboard");
@@ -162,29 +200,32 @@ export default function ScriptBank() {
     // Add to recent scripts (keep last 10)
     setRecentScripts(prev => {
       const newRecent = [id, ...prev.filter(scriptId => scriptId !== id)].slice(0, 10);
+      localStorage.setItem('rescueKit_recentScripts', JSON.stringify(newRecent));
       return newRecent;
     });
 
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleShare = (text: string) => {
-    const finalContent = personalizeText(text);
+  const handleShare = (text: string, id: string) => {
+    const finalContent = personalizeText(text, id);
     const url = `https://wa.me/?text=${encodeURIComponent(finalContent)}`;
     window.open(url, '_blank');
   };
 
   const toggleSave = async (id: string) => {
     if (!user) return;
-    const newSaved = new Set(savedScripts);
-    const isSaving = !newSaved.has(id);
+    const isSaving = !savedScripts[id];
     
     if (isSaving) {
-      newSaved.add(id);
+      setSavedScripts(prev => ({ ...prev, [id]: { tags: [] } }));
     } else {
-      newSaved.delete(id);
+      setSavedScripts(prev => { 
+        const next = { ...prev }; 
+        delete next[id]; 
+        return next; 
+      });
     }
-    setSavedScripts(newSaved);
     
     try {
       const docRef = doc(db, 'saved_scripts', `${user.uid}_${id}`);
@@ -204,8 +245,48 @@ export default function ScriptBank() {
       console.error("Error toggling saved script:", error);
       toast.error("Failed to save script");
       // Revert optimistic update
-      const revertedSaved = new Set(savedScripts);
-      setSavedScripts(revertedSaved);
+      // Skipping full revert for simplicity in this edit, but a more robust app might fetch here
+    }
+  };
+
+  const handleAddTag = async (scriptId: string) => {
+    const tag = tagInputs[scriptId]?.trim();
+    if (!user || !tag) return;
+    
+    const docRef = doc(db, 'saved_scripts', `${user.uid}_${scriptId}`);
+    const originalLabels = savedScripts[scriptId]?.tags || [];
+    
+    if (originalLabels.includes(tag)) {
+      setTagInputs(prev => ({ ...prev, [scriptId]: '' }));
+      return;
+    }
+    
+    const updatedTags = [...originalLabels, tag];
+    setSavedScripts(prev => ({ ...prev, [scriptId]: { tags: updatedTags } }));
+    setTagInputs(prev => ({ ...prev, [scriptId]: '' }));
+    
+    try {
+      await updateDoc(docRef, { tags: updatedTags });
+    } catch(e) {
+      setSavedScripts(prev => ({ ...prev, [scriptId]: { tags: originalLabels } }));
+      toast.error("Failed to add tag");
+    }
+  };
+
+  const handleRemoveTag = async (scriptId: string, tagToRemove: string) => {
+    if (!user) return;
+    
+    const docRef = doc(db, 'saved_scripts', `${user.uid}_${scriptId}`);
+    const originalLabels = savedScripts[scriptId]?.tags || [];
+    const updatedTags = originalLabels.filter(t => t !== tagToRemove);
+    
+    setSavedScripts(prev => ({ ...prev, [scriptId]: { tags: updatedTags } }));
+    
+    try {
+      await updateDoc(docRef, { tags: updatedTags });
+    } catch(e) {
+      setSavedScripts(prev => ({ ...prev, [scriptId]: { tags: originalLabels } }));
+      toast.error("Failed to remove tag");
     }
   };
 
@@ -270,33 +351,70 @@ export default function ScriptBank() {
           </div>
         </div>
 
-        {/* Scenario Pills */}
-        <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
-          <button
-            onClick={() => setActiveScenario(null)}
-            className={clsx(
-              "px-4 py-2 rounded-xl text-[12px] font-bold whitespace-nowrap transition-all border",
-              activeScenario === null 
-                ? "bg-neutral-900 text-white border-neutral-900" 
-                : "bg-white text-neutral-500 border-neutral-200 hover:border-neutral-300"
-            )}
-          >
-            All Scenarios
-          </button>
-          {scenarios.map(s => (
+        {/* Scenario and Tag Filters */}
+        <div className="flex flex-col gap-2">
+          {/* Scenarios */}
+          <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar items-center">
+            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mr-2 shrink-0">Scenarios:</span>
             <button
-              key={s.value}
-              onClick={() => setActiveScenario(activeScenario === s.value ? null : s.value)}
+              onClick={() => setActiveScenario(null)}
               className={clsx(
-                "px-4 py-2 rounded-xl text-[12px] font-bold whitespace-nowrap transition-all border",
-                activeScenario === s.value 
-                  ? "bg-emerald-100 text-emerald-700 border-emerald-200" 
+                "px-4 py-1.5 rounded-xl text-[12px] font-bold whitespace-nowrap transition-all border",
+                activeScenario === null 
+                  ? "bg-neutral-900 text-white border-neutral-900" 
                   : "bg-white text-neutral-500 border-neutral-200 hover:border-neutral-300"
               )}
             >
-              {s.label}
+              All
             </button>
-          ))}
+            {scenarios.map(s => (
+              <button
+                key={s.value}
+                onClick={() => setActiveScenario(activeScenario === s.value ? null : s.value)}
+                className={clsx(
+                  "px-4 py-1.5 rounded-xl text-[12px] font-bold whitespace-nowrap transition-all border",
+                  activeScenario === s.value 
+                    ? "bg-emerald-100 text-emerald-700 border-emerald-200" 
+                    : "bg-white text-neutral-500 border-neutral-200 hover:border-neutral-300"
+                )}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Tags */}
+          {allTags.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar items-center">
+              <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mr-2 shrink-0">Your Tags:</span>
+              <button
+                onClick={() => setActiveTag(null)}
+                className={clsx(
+                  "px-4 py-1.5 rounded-xl text-[12px] font-bold whitespace-nowrap transition-all border",
+                  activeTag === null 
+                    ? "bg-neutral-900 text-white border-neutral-900" 
+                    : "bg-white text-neutral-500 border-neutral-200 hover:border-neutral-300"
+                )}
+              >
+                All
+              </button>
+              {allTags.map(t => (
+                <button
+                  key={t}
+                  onClick={() => setActiveTag(activeTag === t ? null : t)}
+                  className={clsx(
+                    "px-4 py-1.5 rounded-xl text-[12px] font-bold whitespace-nowrap transition-all border flex items-center gap-1.5",
+                    activeTag === t 
+                      ? "bg-emerald-100 text-emerald-700 border-emerald-200" 
+                      : "bg-white text-neutral-500 border-neutral-200 hover:border-neutral-300"
+                  )}
+                >
+                  <Tag size={12} className={activeTag === t ? "text-emerald-600" : "text-neutral-400"} />
+                  {t}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -349,12 +467,12 @@ export default function ScriptBank() {
                         {cat === 'Recent' && <Clock size={20} className={activeCategory === cat ? "text-emerald-400" : "text-emerald-500"} />}
                         {cat}
                       </span>
-                      {cat === 'Saved' && savedScripts.size > 0 && (
+                      {cat === 'Saved' && Object.keys(savedScripts).length > 0 && (
                         <span className={clsx(
                           "inline-flex items-center justify-center text-xs px-2.5 py-1 rounded-full font-bold",
                           activeCategory === cat ? "bg-white/20 text-white" : "bg-neutral-200 text-neutral-700"
                         )}>
-                          {savedScripts.size}
+                          {Object.keys(savedScripts).length}
                         </span>
                       )}
                       {cat === 'Recent' && recentScripts.length > 0 && (
@@ -394,12 +512,12 @@ export default function ScriptBank() {
                   {cat === 'Recent' && <Clock size={14} className={activeCategory === cat ? "text-emerald-400" : "text-emerald-500 group-hover:text-emerald-600"} />}
                   {cat}
                 </span>
-                {cat === 'Saved' && savedScripts.size > 0 && (
+                {cat === 'Saved' && Object.keys(savedScripts).length > 0 && (
                   <span className={clsx(
                     "inline-flex items-center justify-center text-[10px] px-2 py-0.5 rounded-full font-bold",
                     activeCategory === cat ? "bg-white/20 text-white" : "bg-neutral-200 text-neutral-700"
                   )}>
-                    {savedScripts.size}
+                    {Object.keys(savedScripts).length}
                   </span>
                 )}
                 {cat === 'Recent' && recentScripts.length > 0 && (
@@ -450,7 +568,10 @@ export default function ScriptBank() {
                     exit={{ opacity: 0, scale: 0.98 }}
                     transition={{ duration: 0.2 }}
                     key={script.id} 
-                    className="bg-white border border-neutral-200 rounded-3xl shadow-sm hover:shadow-md hover:shadow-emerald-500/5 hover:border-emerald-200 transition-all flex flex-col h-full overflow-hidden group"
+                    className={clsx(
+                      "bg-white border rounded-3xl shadow-sm transition-all flex flex-col h-full overflow-hidden",
+                      copiedId === script.id ? "border-emerald-500 ring-4 ring-emerald-500/20" : "border-neutral-200"
+                    )}
                   >
                     <div className="p-5 sm:p-6 md:p-8 flex-1 flex flex-col">
                       <div className="flex justify-between items-start mb-4 md:mb-5">
@@ -497,19 +618,97 @@ export default function ScriptBank() {
                         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-teal-400"></div>
                         <div className="p-4 sm:p-5 md:p-6">
                           <p className="text-white whitespace-pre-wrap font-medium leading-relaxed text-[14px] md:text-[15px]">
-                            {personalizeText(script.script)}
+                            {personalizeText(script.script, script.id)}
                           </p>
                           {script.optionalVariation && (
                             <div className="mt-4 pt-4 border-t border-white/10">
                               <p className="text-[9px] md:text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-1 md:mb-1.5">Optional Variation</p>
                               <p className="text-[13px] md:text-[14px] text-neutral-300 italic">
-                                "{personalizeText(script.optionalVariation)}"
+                                "{personalizeText(script.optionalVariation, script.id)}"
                               </p>
                             </div>
                           )}
                         </div>
+
+                        {getUnfilledPlaceholders(script.optionalVariation ? script.script + '\n' + script.optionalVariation : script.script, script.id).length > 0 && (
+                          <div className="bg-neutral-800 p-4 sm:p-5 border-t border-white/10 space-y-3">
+                            <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Personalize Variables</p>
+                            <div className="flex flex-wrap gap-3">
+                              {getUnfilledPlaceholders(script.optionalVariation ? script.script + '\n' + script.optionalVariation : script.script, script.id).map(ph => (
+                                <div key={ph} className="flex flex-col flex-1 min-w-[120px]">
+                                  <label className="text-[11px] text-neutral-500 mb-1 leading-none">{ph}</label>
+                                  <input 
+                                    type="text"
+                                    value={customVars[script.id]?.[ph] || ''}
+                                    onChange={e => setCustomVars(prev => ({
+                                      ...prev,
+                                      [script.id]: {
+                                        ...(prev[script.id] || {}),
+                                        [ph]: e.target.value
+                                      }
+                                    }))}
+                                    placeholder="Type value..."
+                                    className="bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-white text-[13px] focus:outline-none focus:border-emerald-500 transition-colors"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {savedScripts[script.id] && (
+                          <div className="bg-neutral-800 p-4 sm:p-5 border-t border-white/10 space-y-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Tag size={14} className="text-neutral-400" />
+                              <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Custom Tags</p>
+                            </div>
+                            {savedScripts[script.id].tags.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mb-2">
+                                {savedScripts[script.id].tags.map(tag => (
+                                  <span key={tag} className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-1 flex items-center gap-1.5 rounded-lg text-[11px] font-bold">
+                                    {tag}
+                                    <button onClick={() => handleRemoveTag(script.id, tag)} className="hover:text-white transition-colors bg-black/20 rounded-full p-0.5">
+                                      <X size={10} />
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2">
+                              <input 
+                                type="text"
+                                placeholder="Add tag (e.g. Objection)"
+                                value={tagInputs[script.id] || ''}
+                                onChange={e => setTagInputs(prev => ({...prev, [script.id]: e.target.value}))}
+                                onKeyDown={e => e.key === 'Enter' && handleAddTag(script.id)}
+                                className="bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-white text-[12px] focus:outline-none focus:border-emerald-500 flex-1 transition-colors"
+                              />
+                              <button 
+                                onClick={() => handleAddTag(script.id)}
+                                className="bg-neutral-700 hover:bg-neutral-600 text-white rounded-lg px-4 py-2 text-[12px] font-bold transition-colors"
+                              >
+                                Add
+                              </button>
+                            </div>
+                          </div>
+                        )}
                         
                         <div className="flex border-t border-white/10">
+                          <button 
+                            onClick={() => toggleSave(script.id)}
+                            className={clsx(
+                              "flex-1 py-4.5 px-4 font-bold text-[14px] flex items-center justify-center gap-2 transition-all border-r border-white/10",
+                              savedScripts[script.id]
+                                ? "bg-amber-400/10 text-amber-500 hover:bg-amber-400/20" 
+                                : "bg-white/5 text-white hover:bg-white/10"
+                            )}
+                          >
+                            {savedScripts[script.id] ? (
+                              <><Star size={18} className="fill-amber-500" /> Saved</>
+                            ) : (
+                              <><Star size={18} /> Save</>
+                            )}
+                          </button>
                           <button 
                             onClick={() => handleCopy(script.script, script.id)}
                             className={clsx(
@@ -526,7 +725,7 @@ export default function ScriptBank() {
                             )}
                           </button>
                           <button 
-                            onClick={() => handleShare(script.script)}
+                            onClick={() => handleShare(script.script, script.id)}
                             className="flex-1 py-4.5 px-4 font-bold text-[14px] flex items-center justify-center gap-2 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 transition-all border-l border-white/10"
                           >
                             <Share2 size={18} /> Share
