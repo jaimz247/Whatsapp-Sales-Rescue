@@ -15,15 +15,17 @@ import { useAuth } from '../context/AuthContext';
 import { isSignInWithEmailLink } from 'firebase/auth';
 import { auth } from '../firebase';
 
-type AccessState = 'landing' | 'signin' | 'check-email' | 'welcome' | 'success' | 'error' | 'expired-link' | 'logged-out' | 'verifying' | 'confirm-email';
+type AccessState = 'landing' | 'signin-email' | 'password-entry' | 'check-email' | 'welcome' | 'success' | 'error' | 'expired-link' | 'logged-out' | 'verifying' | 'confirm-email';
 
 export default function Access() {
   const [state, setState] = useState<AccessState>('landing');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isNewUser, setIsNewUser] = useState(false);
   const [error, setError] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
-  const { signIn, signInWithGoogle, user, confirmAccess, signOut, completeSignIn } = useAuth();
+  const { signInWithGoogle, user, confirmAccess, signOut, completeSignIn, verifyEmailAccess, logInEmailPass, signUpEmailPass, sendPasswordReset } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -70,7 +72,7 @@ export default function Access() {
     return () => clearInterval(interval);
   }, [resendTimer]);
 
-  const handleSignIn = async (e: React.FormEvent) => {
+  const handleEmailCheck = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !email.includes('@')) {
       setError('Please enter a valid buyer email address.');
@@ -81,15 +83,72 @@ export default function Access() {
     setIsProcessing(true);
     
     try {
-      await signIn(email);
-      setState('check-email');
-      setResendTimer(60);
+      const hasAccess = await verifyEmailAccess(email);
+      if (!hasAccess) {
+        setError("Your email hasn't been approved for access yet. Please purchase access first or use the correct email.");
+        setState('error');
+        return;
+      }
+      
+      setState('password-entry');
     } catch (err) {
-      console.error("Sign in error:", err);
+      console.error("Check email error:", err);
       setError('Access denied. Please check your email or contact support.');
       setState('error');
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!password || password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+
+    setIsProcessing(true);
+    setError('');
+
+    try {
+      if (authMode === 'signup') {
+        try {
+          await signUpEmailPass(email, password);
+        } catch (signupErr: any) {
+          if (signupErr.message.includes('auth/email-already-in-use')) {
+            setError('Account already exists. Please switch to Sign In.');
+          } else {
+            throw signupErr;
+          }
+        }
+      } else {
+        try {
+          await logInEmailPass(email, password);
+        } catch (loginErr: any) {
+          if (loginErr.message.includes('auth/invalid-credential') || loginErr.message.includes('auth/user-not-found') || loginErr.message.includes('Firebase: Error')) {
+            setError('Invalid email or password. If this is your first time, please switch to Create Account.');
+          } else {
+            throw loginErr;
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error("Auth error:", err);
+      if (!error) setError(err.message || 'Authentication failed. Please check your credentials.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) return;
+    try {
+      await sendPasswordReset(email);
+      toast.success('Password reset email sent! Check your inbox.');
+    } catch (err) {
+      // Ignored
     }
   };
 
@@ -248,7 +307,7 @@ export default function Access() {
                 )}
               </button>
               <button 
-                onClick={() => setState('signin')}
+                onClick={() => setState('signin-email')}
                 disabled={isProcessing}
                 className="w-full bg-neutral-900 text-white py-4 rounded-xl font-medium text-[16px] hover:bg-neutral-800 transition-all active:scale-[0.98] flex items-center justify-center gap-2 shadow-md"
               >
@@ -259,7 +318,7 @@ export default function Access() {
           </motion.div>
         );
 
-      case 'signin':
+      case 'signin-email':
         return (
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
@@ -268,10 +327,10 @@ export default function Access() {
           >
             <div className="text-center mb-8">
               <h2 className="text-3xl font-semibold text-neutral-900 mb-3 tracking-tight">Private Access Portal</h2>
-              <p className="text-neutral-500 font-light text-[16px]">Enter your email to receive a secure access link.</p>
+              <p className="text-neutral-500 font-light text-[16px]">Enter your email address to continue.</p>
             </div>
             
-            <form onSubmit={handleSignIn} className="space-y-5">
+            <form onSubmit={handleEmailCheck} className="space-y-5">
               <div>
                 <input 
                   type="email"
@@ -294,10 +353,10 @@ export default function Access() {
                 {isProcessing ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    Sending...
+                    Verifying...
                   </>
                 ) : (
-                  'Send access link'
+                  'Continue'
                 )}
               </button>
             </form>
@@ -308,6 +367,92 @@ export default function Access() {
             >
               Cancel
             </button>
+          </motion.div>
+        );
+
+      case 'password-entry':
+        return (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+          >
+            <div className="text-center mb-8">
+              <h2 className="text-3xl font-semibold text-neutral-900 mb-3 tracking-tight">
+                {authMode === 'signup' ? 'Create Account' : 'Welcome Back'}
+              </h2>
+              <p className="text-neutral-500 font-light text-[16px]">Accessing as <strong className="text-neutral-900 font-medium">{email}</strong></p>
+            </div>
+
+            {/* Auth Mode Toggle Tabs */}
+            <div className="flex bg-neutral-100 p-1 rounded-xl mb-6">
+              <button
+                onClick={() => { setAuthMode('signin'); setError(''); }}
+                className={`flex-1 py-2 text-[14px] font-bold rounded-lg transition-all ${authMode === 'signin' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+              >
+                Sign In
+              </button>
+              <button
+                onClick={() => { setAuthMode('signup'); setError(''); }}
+                className={`flex-1 py-2 text-[14px] font-bold rounded-lg transition-all ${authMode === 'signup' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+              >
+                Create Account
+              </button>
+            </div>
+            
+            <form onSubmit={handleAuthSubmit} className="space-y-5">
+              <div>
+                <input 
+                  type="password"
+                  placeholder={authMode === 'signup' ? "Create a Password" : "Password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-white border border-neutral-200 rounded-xl py-4 px-5 text-[16px] focus:outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 transition-all placeholder:text-neutral-400 shadow-sm"
+                  required
+                  autoFocus
+                />
+              </div>
+
+              {authMode === 'signup' && (
+                <div className="text-[14px] text-neutral-600 bg-emerald-50 text-emerald-800 p-4 rounded-xl border border-emerald-100">
+                  <strong className="flex items-center gap-1"><CheckCircle2 size={16} /> Welcome to the family!</strong>
+                  Your email is approved for Premium Access. Create a password to secure your account.
+                </div>
+              )}
+
+              <button 
+                type="submit"
+                disabled={isProcessing}
+                className="w-full bg-neutral-900 text-white py-4 rounded-xl font-medium text-[16px] hover:bg-neutral-800 transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md"
+              >
+                {isProcessing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Authenticating...
+                  </>
+                ) : (
+                  authMode === 'signup' ? 'Create Account & Sign In' : 'Sign In'
+                )}
+              </button>
+            </form>
+            
+            <div className="flex justify-between items-center mt-6 px-2">
+              <button 
+                onClick={() => { setState('signin-email'); setPassword(''); }}
+                className="text-neutral-400 font-medium text-[14px] hover:text-neutral-600 transition-colors"
+              >
+                ← Back
+              </button>
+
+              {authMode === 'signin' && (
+                <button 
+                  onClick={handleForgotPassword}
+                  className="text-neutral-500 font-medium text-[14px] hover:text-neutral-900 transition-colors"
+                >
+                  Forgot Password?
+                </button>
+              )}
+            </div>
           </motion.div>
         );
 

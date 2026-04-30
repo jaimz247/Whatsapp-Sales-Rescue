@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { auth, sendMagicLink, completeMagicLinkSignIn, signInWithGoogle, logout, db } from '../firebase';
+import { auth, sendMagicLink, completeMagicLinkSignIn, signInWithGoogle, logout, db, logInWithEmail, signUpWithEmail, resetPassword, checkEmailHasAccess } from '../firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
@@ -16,6 +16,10 @@ interface AuthContextType {
   isLoading: boolean;
   signIn: (email: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  logInEmailPass: (email: string, pass: string) => Promise<void>;
+  signUpEmailPass: (email: string, pass: string) => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<void>;
+  verifyEmailAccess: (email: string) => Promise<boolean>;
   signOut: () => Promise<void>;
   confirmAccess: () => Promise<void>;
   completeSignIn: (url: string) => Promise<void>;
@@ -146,6 +150,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const handleLogInEmailPass = async (email: string, pass: string) => {
+    setIsLoading(true);
+    try {
+      await logInWithEmail(email, pass);
+    } catch (error: any) {
+      console.error("Error logging in with email/pass:", error);
+      toast.error(error.message || "Failed to log in");
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSignUpEmailPass = async (email: string, pass: string) => {
+    setIsLoading(true);
+    try {
+      await signUpWithEmail(email, pass);
+    } catch (error: any) {
+      console.error("Error signing up with email/pass:", error);
+      toast.error(error.message || "Failed to create account");
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSendPasswordReset = async (email: string) => {
+    setIsLoading(true);
+    try {
+      await resetPassword(email);
+      toast.success("Password reset email sent!");
+    } catch (error: any) {
+      console.error("Error sending reset email:", error);
+      toast.error(error.message || "Failed to send reset email");
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyEmailAccess = async (email: string) => {
+    try {
+      return await checkEmailHasAccess(email);
+    } catch (error) {
+      console.error("Error verifying access:", error);
+      return false;
+    }
+  };
+
   const handleSignOut = async () => {
     setIsLoading(true);
     try {
@@ -160,7 +213,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, signIn, signInWithGoogle: handleGoogleSignIn, signOut: handleSignOut, confirmAccess, completeSignIn }}>
+    <AuthContext.Provider value={{ 
+        user, isLoading, signIn, signInWithGoogle: handleGoogleSignIn, 
+        logInEmailPass: handleLogInEmailPass, signUpEmailPass: handleSignUpEmailPass, 
+        sendPasswordReset: handleSendPasswordReset, verifyEmailAccess: handleVerifyEmailAccess, 
+        signOut: handleSignOut, confirmAccess, completeSignIn 
+      }}>
       {children}
     </AuthContext.Provider>
   );

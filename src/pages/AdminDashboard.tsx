@@ -4,7 +4,7 @@ import {
   Shield, Plus, Search, Users, AlertCircle, CheckCircle2, 
   XCircle, Crown, User as UserIcon, Download, ArrowUpDown, 
   ArrowUp, ArrowDown, Gift, DollarSign, BarChart as BarChartIcon, 
-  Activity, Target, Clock, Calendar, CheckSquare, Settings, Zap, PieChart as PieChartIcon, Check, Webhook
+  Activity, Target, Clock, Calendar, CheckSquare, Settings, Zap, PieChart as PieChartIcon, Check, Webhook, Mail, Copy
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { db } from '../firebase';
@@ -43,7 +43,7 @@ interface Referral {
 
 type SortField = 'email' | 'displayName' | 'accessStatus' | 'upgradeStatus' | 'role' | 'createdAt' | 'lastLoginAt';
 type SortDirection = 'asc' | 'desc';
-type TabType = 'overview' | 'users' | 'referrals' | 'analytics' | 'webhooks';
+type TabType = 'overview' | 'users' | 'referrals' | 'analytics' | 'webhooks' | 'emails';
 
 const COLORS = ['#10b981', '#f59e0b', '#ef4444', '#6366f1', '#8b5cf6'];
 
@@ -474,7 +474,7 @@ export default function AdminDashboard() {
 
       {/* Modern Tabs */}
       <div className="flex overflow-x-auto hide-scrollbar items-center gap-2 mb-8 bg-neutral-100/80 p-1.5 rounded-2xl border border-neutral-200/60 max-w-fit">
-        {(['overview', 'users', 'referrals', 'analytics', 'webhooks'] as TabType[]).map((tab) => (
+        {(['overview', 'users', 'referrals', 'analytics', 'webhooks', 'emails'] as TabType[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -489,6 +489,7 @@ export default function AdminDashboard() {
             {tab === 'referrals' && <Gift size={16} />}
             {tab === 'analytics' && <BarChartIcon size={16} />}
             {tab === 'webhooks' && <Webhook size={16} />}
+            {tab === 'emails' && <Mail size={16} />}
             {tab}
           </button>
         ))}
@@ -1143,6 +1144,110 @@ export default function AdminDashboard() {
                     </tbody>
                   </table>
                 )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab === 'emails' && (
+          <motion.div
+            key="emails"
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+            className="space-y-6"
+          >
+            <div className="bg-white border border-neutral-200 rounded-3xl p-6 md:p-8 shadow-sm">
+              <div className="max-w-3xl mb-8">
+                <h2 className="text-2xl font-bold text-neutral-900 mb-3 tracking-tight flex items-center gap-2">
+                  <Mail className="text-indigo-600" /> Communcation Templates
+                </h2>
+                <p className="text-neutral-500 font-medium text-[15px]">
+                  Professional, pre-written templates you can use for your Selar purchase confirmation emails, onboarding sequences, or individual support replies. Simply copy and paste these into your email provider or Selar product settings.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-8">
+                {[
+                  {
+                    title: "1. Selar Purchase Welcome & Access Instructions (Important)",
+                    description: "Set this as the automated message buyers receive immediately after purchase on Selar. It guides them smoothly through the new login process.",
+                    subject: "Your Private Access: Elevate Mensah Sales Rescue Kit",
+                    body: `Hi there,\n\nThank you for your purchase! I'm thrilled to welcome you to the WhatsApp Sales Rescue Kit.\n\nYour purchase has been securely processed and your email is fully approved for Premium Access.\n\nTo access your dashboard and all the premium modules, please follow these steps:\n1. Go to the private access portal: https://[YOUR_APP_URL]/access\n2. Enter the exact email address you used to make your purchase.\n3. Since this is your first time, click on the **\"Create Account\"** tab.\n4. Create a secure password. Your account will be created instantly and you will be logged in.\n\nFor future visits, simply use the \"Sign In\" tab with your email and the password you just created.\n\nIf you encounter any issues logging in, please reply directly to this email or reach out to our support team.\n\nLet's get to work and elevate your sales!\n\nBest,\nThe Elevate Mensah Team`
+                  },
+                  {
+                    title: "2. Password Reset Instructions (Manual Support)",
+                    description: "Send this if a user emails you saying they forgot their password and are struggling to log in.",
+                    subject: "Resetting your password for Elevate Mensah",
+                    body: `Hi there,\n\nWe noticed you're having trouble logging into your Elevate Mensah Premium Access.\n\nTo reset your password and get back into your account:\n1. Go to the login page: https://[YOUR_APP_URL]/access\n2. Enter your email address and click \"Continue\"\n3. Click on the \"Forgot Password?\" link at the bottom of the screen.\n4. You will receive an automated email from Firebase/Google with a secure link to reset your password.\n\nIf you're still having trouble after following these steps, let us know and we'll be happy to assist further.\n\nBest,\nThe Elevate Mensah Team`
+                  },
+                  {
+                    title: "3. Onboarding Follow-Up (Day 3 Check-in)",
+                    description: "Send this 2-3 days after purchase to encourage engagement and show excellent customer care.",
+                    subject: "Checking in: How's the Sales Rescue Kit?",
+                    body: `Hey,\n\nIt's been a few days since you got the WhatsApp Sales Rescue Kit. I hope you've had a chance to log in and start exploring the modules!\n\nA great place to start is the \"Main Guide\" to get the foundational strategy, then quickly jump into the \"Quick Replies Worksheet\" to start seeing immediate action in your conversations.\n\nHave you had any big wins or \"aha\" moments yet?\n\nWe genuinely care about your progress. Hit reply and let me know—I read every email.\n\nBest,\nThe Elevate Mensah Team`
+                  },
+                  {
+                    title: "4. Cart Abandonment (Selar Recovery)",
+                    description: "Use this to win back users who clicked your checkout link but didn't complete the purchase.",
+                    subject: "You left something behind (plus a little gift inside)",
+                    body: `Hi there,\n\nI noticed you were checking out the WhatsApp Sales Rescue Kit but didn't quite finish your purchase.\n\nI know life gets busy, or maybe you had a quick question before committing. If there's anything you're unsure about, just reply to this email! I'm happy to help.\n\nTo make your decision a bit easier, here is a special 10% discount code just for you: RESCUE10\n\nYou can complete your purchase and claim your discount here: [YOUR_SELAR_CHECKOUT_LINK]\n\nHope to see you inside the portal soon.\n\nBest,\nThe Elevate Mensah Team`
+                  },
+                  {
+                    title: "5. Leave a Testimonial (Day 14 Request)",
+                    description: "Send this about two weeks after purchase to collect valuable social proof and reviews.",
+                    subject: "Quick question about your experience",
+                    body: `Hey,\n\nI hope you're loving the WhatsApp Sales Rescue Kit and already seeing some great results in your business!\n\nAs a creator, nothing means more to me than hearing how these strategies are helping my students. It also helps other business owners know if this kit is right for them.\n\nIf you have 2 minutes today, would you be willing to leave a quick, honest review?\n\nYou can drop your review right here: [YOUR_REVIEW_LINK]\n\nThank you so much for your support and trust.\n\nBest,\nThe Elevate Mensah Team`
+                  },
+                  {
+                    title: "6. Course Update / New Feature Announcement",
+                    description: "When you add new resources, templates, or chapters to the platform, let your students know.",
+                    subject: "Boom! We just added something new for you \uD83D\uDE80",
+                    body: `Hi everyone,\n\nI'm so excited to announce that a brand new module was just added to your dashboard!\n\nI've seen the struggles so many of you have had with [Topic/Problem], so I went back to the lab and put together a step-by-step guide to solve it. It's completely free and available to you right now as an existing member.\n\nLog in here to check it out: https://[YOUR_APP_URL]/access\n\nLet me know what you think!\n\nBest,\nThe Elevate Mensah Team`
+                  }
+                ].map((tpl, i) => (
+                  <div key={i} className="border border-neutral-200 rounded-2xl bg-neutral-50/50 overflow-hidden">
+                    <div className="p-5 border-b border-neutral-200 bg-white">
+                      <h3 className="text-lg font-bold text-neutral-900 mb-1">{tpl.title}</h3>
+                      <p className="text-[14px] text-neutral-500">{tpl.description}</p>
+                    </div>
+                    <div className="p-5 space-y-4">
+                      <div>
+                        <div className="text-[11px] font-bold text-neutral-400 uppercase tracking-widest mb-2 flex justify-between items-center">
+                          Subject Line
+                          <button 
+                            onClick={() => {
+                              navigator.clipboard.writeText(tpl.subject);
+                              toast.success('Subject line copied!');
+                            }}
+                            className="text-indigo-600 hover:text-indigo-700 flex items-center gap-1 normal-case tracking-normal"
+                          >
+                            <Copy size={12} /> Copy
+                          </button>
+                        </div>
+                        <div className="bg-white p-3 border border-neutral-200 rounded-xl text-[14px] font-medium text-neutral-900 shadow-sm">
+                          {tpl.subject}
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <div className="text-[11px] font-bold text-neutral-400 uppercase tracking-widest mb-2 flex justify-between items-center">
+                          Email Body
+                          <button 
+                            onClick={() => {
+                              navigator.clipboard.writeText(tpl.body);
+                              toast.success('Email body copied!');
+                            }}
+                            className="text-indigo-600 hover:text-indigo-700 flex items-center gap-1 normal-case tracking-normal"
+                          >
+                            <Copy size={12} /> Copy
+                          </button>
+                        </div>
+                        <div className="bg-white p-4 border border-neutral-200 rounded-xl text-[14px] font-medium text-neutral-700 shadow-sm whitespace-pre-wrap font-mono leading-relaxed">
+                          {tpl.body}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </motion.div>

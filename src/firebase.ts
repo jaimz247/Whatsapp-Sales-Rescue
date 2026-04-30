@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { getAuth, isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, updatePassword, EmailAuthProvider, reauthenticateWithCredential, updateProfile } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer, setDoc, serverTimestamp } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -127,6 +127,83 @@ export const signInWithGoogle = async () => {
   }
   
   return result.user;
+};
+
+export const checkEmailHasAccess = async (email: string) => {
+  const normalizedEmail = email.toLowerCase().trim();
+  const isHardcodedAdmin = normalizedEmail === 'elevatemensah@gmail.com' || normalizedEmail === 'jaxx700@gmail.com';
+  
+  if (isHardcodedAdmin) return true;
+  
+  const allowedUserDoc = await getDocFromServer(doc(db, 'allowed_users', normalizedEmail));
+  return allowedUserDoc.exists();
+};
+
+export const logInWithEmail = async (email: string, pass: string) => {
+  const result = await signInWithEmailAndPassword(auth, email, pass);
+  
+  // Verify access just in case
+  const hasAccess = await checkEmailHasAccess(email);
+  if (!hasAccess) {
+    await signOut(auth);
+    throw new Error('Unauthorized email address. Access denied. Please purchase access first.');
+  }
+
+  // Update last login
+  const userDocRef = doc(db, 'users', result.user.uid);
+  const userDoc = await getDocFromServer(userDocRef);
+  if (userDoc.exists()) {
+    await setDoc(userDocRef, { lastLoginAt: serverTimestamp() }, { merge: true });
+  }
+  
+  return result.user;
+};
+
+export const signUpWithEmail = async (email: string, pass: string) => {
+  const hasAccess = await checkEmailHasAccess(email);
+  if (!hasAccess) {
+    throw new Error('Unauthorized email address. Access denied. Please purchase access first.');
+  }
+
+  const result = await createUserWithEmailAndPassword(auth, email, pass);
+  const normalizedEmail = email.toLowerCase().trim();
+  const isHardcodedAdmin = normalizedEmail === 'elevatemensah@gmail.com' || normalizedEmail === 'jaxx700@gmail.com';
+
+  const userDocRef = doc(db, 'users', result.user.uid);
+  await setDoc(userDocRef, {
+    email: result.user.email,
+    displayName: '',
+    photoURL: '',
+    createdAt: serverTimestamp(),
+    lastLoginAt: serverTimestamp(),
+    accessStatus: 'active',
+    upgradeStatus: 'free',
+    onboardingCompleted: false,
+    role: isHardcodedAdmin ? 'admin' : 'user'
+  });
+  
+  return result.user;
+};
+
+export const resetPassword = async (email: string) => {
+  await sendPasswordResetEmail(auth, email);
+};
+
+export const changeUserPassword = async (currentPass: string, newPass: string) => {
+  if (!auth.currentUser || !auth.currentUser.email) {
+    throw new Error("You must be logged in to change your password.");
+  }
+  const cred = EmailAuthProvider.credential(auth.currentUser.email, currentPass);
+  await reauthenticateWithCredential(auth.currentUser, cred);
+  await updatePassword(auth.currentUser, newPass);
+};
+
+export const updateUserProfileData = async (displayName: string) => {
+  if (!auth.currentUser) throw new Error("Not logged in");
+  await updateProfile(auth.currentUser, { displayName });
+  
+  const userDocRef = doc(db, 'users', auth.currentUser.uid);
+  await setDoc(userDocRef, { displayName }, { merge: true });
 };
 
 export const logout = async () => {
