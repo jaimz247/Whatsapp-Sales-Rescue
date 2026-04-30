@@ -47,10 +47,20 @@ export const sendMagicLink = async (email: string, redirectUrl: string) => {
 export const completeMagicLinkSignIn = async (url: string) => {
   if (isSignInWithEmailLink(auth, url)) {
     let email = window.localStorage.getItem('emailForSignIn');
+    
     if (!email) {
-      // User opened the link on a different device. Prompt for email.
-      email = window.prompt('Please provide your email for confirmation');
+      try {
+        const urlObj = new URL(url);
+        email = urlObj.searchParams.get('email');
+      } catch (e) {
+        // ignore
+      }
     }
+    
+    if (!email) {
+      throw new Error('MISSING_EMAIL_FOR_SIGN_IN');
+    }
+
     if (email) {
       const result = await signInWithEmailLink(auth, email, url);
       window.localStorage.removeItem('emailForSignIn');

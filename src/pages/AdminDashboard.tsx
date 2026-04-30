@@ -4,7 +4,7 @@ import {
   Shield, Plus, Search, Users, AlertCircle, CheckCircle2, 
   XCircle, Crown, User as UserIcon, Download, ArrowUpDown, 
   ArrowUp, ArrowDown, Gift, DollarSign, BarChart as BarChartIcon, 
-  Activity, Target, Clock, Calendar, CheckSquare, Settings, Zap, PieChart as PieChartIcon
+  Activity, Target, Clock, Calendar, CheckSquare, Settings, Zap, PieChart as PieChartIcon, Check, Webhook
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { db } from '../firebase';
@@ -43,7 +43,7 @@ interface Referral {
 
 type SortField = 'email' | 'displayName' | 'accessStatus' | 'upgradeStatus' | 'role' | 'createdAt' | 'lastLoginAt';
 type SortDirection = 'asc' | 'desc';
-type TabType = 'overview' | 'users' | 'referrals' | 'analytics';
+type TabType = 'overview' | 'users' | 'referrals' | 'analytics' | 'webhooks';
 
 const COLORS = ['#10b981', '#f59e0b', '#ef4444', '#6366f1', '#8b5cf6'];
 
@@ -67,7 +67,9 @@ export default function AdminDashboard() {
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [referralsLoading, setReferralsLoading] = useState(false);
 
-  // Analytics state
+  // Webhooks state
+  const [webhooks, setWebhooks] = useState<any[]>([]);
+  const [webhooksLoading, setWebhooksLoading] = useState(false);
   const [analytics, setAnalytics] = useState({
     scriptsSaved: 0,
     auditsCompleted: 0,
@@ -84,7 +86,27 @@ export default function AdminDashboard() {
     fetchAllData();
     fetchReferrals();
     fetchAnalytics();
+    fetchWebhooks();
   }, [user, navigate]);
+
+  const fetchWebhooks = async () => {
+    setWebhooksLoading(true);
+    try {
+      const webhooksRef = collection(db, 'webhook_logs');
+      const q = query(webhooksRef, orderBy('createdAt', 'desc'));
+      const snapshot = await getDocs(q);
+      
+      const hooks: any[] = [];
+      snapshot.forEach(doc => {
+        hooks.push({ id: doc.id, ...doc.data() });
+      });
+      setWebhooks(hooks);
+    } catch (err) {
+      console.error("Error fetching webhooks:", err);
+    } finally {
+      setWebhooksLoading(false);
+    }
+  };
 
   const fetchAnalytics = async () => {
     try {
@@ -452,7 +474,7 @@ export default function AdminDashboard() {
 
       {/* Modern Tabs */}
       <div className="flex overflow-x-auto hide-scrollbar items-center gap-2 mb-8 bg-neutral-100/80 p-1.5 rounded-2xl border border-neutral-200/60 max-w-fit">
-        {(['overview', 'users', 'referrals', 'analytics'] as TabType[]).map((tab) => (
+        {(['overview', 'users', 'referrals', 'analytics', 'webhooks'] as TabType[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -466,6 +488,7 @@ export default function AdminDashboard() {
             {tab === 'users' && <Users size={16} />}
             {tab === 'referrals' && <Gift size={16} />}
             {tab === 'analytics' && <BarChartIcon size={16} />}
+            {tab === 'webhooks' && <Webhook size={16} />}
             {tab}
           </button>
         ))}
@@ -1047,6 +1070,79 @@ export default function AdminDashboard() {
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab === 'webhooks' && (
+          <motion.div
+            key="webhooks"
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+            className="space-y-6"
+          >
+            <div className="bg-white border border-neutral-200 rounded-3xl shadow-sm overflow-hidden flex flex-col h-[calc(100vh-200px)] min-h-[600px]">
+              <div className="p-5 border-b border-neutral-100 flex items-center justify-between bg-neutral-50/50">
+                <h2 className="text-lg font-bold text-neutral-900 flex items-center gap-2">
+                  <Webhook size={20} className="text-emerald-500" />
+                  Received Webhooks <span className="text-neutral-400 font-medium">({webhooks.length})</span>
+                </h2>
+                <button
+                  onClick={fetchWebhooks}
+                  className="px-4 py-2 bg-white border border-neutral-200 text-neutral-700 rounded-xl font-bold text-[13px] hover:bg-neutral-50 transition-all shadow-sm flex items-center gap-2"
+                >
+                  <Activity size={16} />Refresh Logs
+                </button>
+              </div>
+
+              <div className="overflow-x-auto flex-1 h-full">
+                {webhooksLoading ? (
+                  <div className="p-12 flex justify-center h-full items-center">
+                    <div className="w-10 h-10 border-4 border-neutral-200 border-t-emerald-500 rounded-full animate-spin"></div>
+                  </div>
+                ) : webhooks.length === 0 ? (
+                  <div className="p-16 text-center flex flex-col items-center justify-center h-full text-neutral-400">
+                    <Webhook size={48} className="mb-4 opacity-20" />
+                    <p className="text-[15px] font-medium text-neutral-500">No webhooks received yet.</p>
+                  </div>
+                ) : (
+                  <table className="w-full text-left border-collapse min-w-[800px]">
+                    <thead className="sticky top-0 bg-white/95 backdrop-blur-sm z-10 shadow-sm border-b border-neutral-200">
+                      <tr>
+                        <th className="py-4 px-6 text-[11px] font-bold text-neutral-400 uppercase tracking-widest">Date/Time</th>
+                        <th className="py-4 px-6 text-[11px] font-bold text-neutral-400 uppercase tracking-widest">Provider</th>
+                        <th className="py-4 px-6 text-[11px] font-bold text-neutral-400 uppercase tracking-widest">Raw Payload</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-100">
+                      {webhooks.map((w) => (
+                        <tr key={w.id} className="hover:bg-neutral-50 transition-colors group align-top">
+                          <td className="py-4 px-6">
+                            <div className="text-[13px] text-neutral-600 font-medium whitespace-nowrap">
+                              {w.createdAt?.toDate ? format(w.createdAt.toDate(), 'MMM dd, yyyy HH:mm:ss') : 'Unknown'}
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100">
+                              {w.provider || 'unknown'}
+                            </span>
+                          </td>
+                          <td className="py-4 px-6">
+                            <details className="cursor-pointer group/details">
+                              <summary className="text-[13px] font-bold text-indigo-600 hover:text-indigo-700 mb-2 list-none flex items-center gap-2">
+                                <span className="group-open/details:hidden">View Payload</span>
+                                <span className="hidden group-open/details:inline">Hide Payload</span>
+                              </summary>
+                              <pre className="text-[11px] text-neutral-600 bg-neutral-100 p-4 rounded-xl overflow-x-auto border border-neutral-200">
+                                {JSON.stringify(w.payload, null, 2)}
+                              </pre>
+                            </details>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
           </motion.div>

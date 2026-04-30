@@ -96,7 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       // In development/preview, we might need to use the current origin
-      const redirectUrl = `${window.location.origin}/access`;
+      const redirectUrl = `${window.location.origin}/access?email=${encodeURIComponent(email)}`;
       await sendMagicLink(email, redirectUrl);
     } catch (error: any) {
       console.error("Error sending magic link:", error);

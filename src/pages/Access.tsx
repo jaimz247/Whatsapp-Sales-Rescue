@@ -15,7 +15,7 @@ import { useAuth } from '../context/AuthContext';
 import { isSignInWithEmailLink } from 'firebase/auth';
 import { auth } from '../firebase';
 
-type AccessState = 'landing' | 'signin' | 'check-email' | 'welcome' | 'success' | 'error' | 'expired-link' | 'logged-out' | 'verifying';
+type AccessState = 'landing' | 'signin' | 'check-email' | 'welcome' | 'success' | 'error' | 'expired-link' | 'logged-out' | 'verifying' | 'confirm-email';
 
 export default function Access() {
   const [state, setState] = useState<AccessState>('landing');
@@ -45,8 +45,12 @@ export default function Access() {
         try {
           await completeSignIn(window.location.href);
           // The onAuthStateChanged listener in AuthContext will handle the redirect
-        } catch (err) {
+        } catch (err: any) {
           console.error("Magic link error:", err);
+          if (err.message === 'MISSING_EMAIL_FOR_SIGN_IN') {
+            setState('confirm-email');
+            return;
+          }
           setError('Invalid or expired sign-in link. Please request a new one.');
           setState('expired-link');
         }
@@ -106,6 +110,28 @@ export default function Access() {
     setTimeout(() => navigate('/'), 1500);
   };
 
+  const handleConfirmEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !email.includes('@')) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+    
+    setIsProcessing(true);
+    // Temporarily set it so completeSignIn can use it
+    window.localStorage.setItem('emailForSignIn', email);
+    
+    try {
+      await completeSignIn(window.location.href);
+    } catch (err: any) {
+      console.error("Confirm email error:", err);
+      setError('Invalid email or expired sign-in link. Please request a new one.');
+      setState('expired-link');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const renderContent = () => {
     switch (state) {
       case 'verifying':
@@ -122,6 +148,54 @@ export default function Access() {
             <p className="text-neutral-500 font-light text-[15px]">
               Please wait a moment.
             </p>
+          </motion.div>
+        );
+
+      case 'confirm-email':
+        return (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+          >
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 bg-neutral-900 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+                <Mail size={24} className="text-white" strokeWidth={1.5} />
+              </div>
+              <h2 className="text-2xl font-semibold text-neutral-900 mb-3 tracking-tight">Confirm your email</h2>
+              <p className="text-neutral-500 font-light text-[15px]">Please enter the email address you used to request this link.</p>
+            </div>
+            
+            <form onSubmit={handleConfirmEmailSubmit} className="space-y-4">
+              <div>
+                <input 
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  spellCheck={false}
+                  placeholder="Email address"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-white border border-neutral-200 rounded-xl py-4 px-5 text-[16px] focus:outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 transition-all placeholder:text-neutral-400 shadow-sm"
+                  required
+                  autoFocus
+                />
+              </div>
+              <button 
+                type="submit"
+                disabled={isProcessing}
+                className="w-full bg-neutral-900 text-white py-4 rounded-xl font-medium text-[16px] hover:bg-neutral-800 transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md"
+              >
+                {isProcessing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Verifying...
+                  </>
+                ) : (
+                  'Complete Sign In'
+                )}
+              </button>
+            </form>
           </motion.div>
         );
 
